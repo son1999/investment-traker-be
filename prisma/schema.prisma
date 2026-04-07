@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Transaction {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      DateTime @db.Date
+  assetType String   @map("asset_type")
+  assetCode String   @map("asset_code")
+  action    String
+  quantity  Float
+  unitPrice Float    @map("unit_price")
+  note      String?
+  icon      String
+  iconBg    String   @map("icon_bg")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("transactions")
+}
+
+model Price {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  code      String
+  icon      String
+  type      String
+  price     Float
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([userId, code])
+  @@map("prices")
+}
+
+model AllocationTarget {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  assetType     String   @map("asset_type")
+  targetPercent Float    @map("target_percent")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([userId, assetType])
+  @@map("allocation_targets")
+}
