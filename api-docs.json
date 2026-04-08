@@ -1,0 +1,610 @@
+{
+  "baseUrl": "https://itracker-be.onrender.com",
+  "auth": {
+    "type": "Bearer",
+    "header": "Authorization",
+    "description": "All endpoints except POST /api/auth/login require Bearer token"
+  },
+  "commonTypes": {
+    "AssetType": ["metal", "crypto", "stock"],
+    "TransactionAction": ["MUA", "BAN"],
+    "Period": ["1m", "3m", "6m", "1y", "all"],
+    "AllocationStatus": ["on-target", "overweight", "underweight"],
+    "PaginationMeta": {
+      "total": "number",
+      "page": "number",
+      "limit": "number",
+      "pages": "number"
+    }
+  },
+  "endpoints": [
+    {
+      "group": "Auth",
+      "prefix": "/api/auth",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/api/auth/login",
+          "description": "Login with email/password",
+          "auth": false,
+          "requestBody": {
+            "email": "string (email format, required)",
+            "password": "string (min 6 chars, required)"
+          },
+          "response": {
+            "accessToken": "string",
+            "refreshToken": "string",
+            "user": {
+              "id": "string (UUID)",
+              "email": "string"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/logout",
+          "description": "Logout current user",
+          "auth": true,
+          "requestBody": null,
+          "response": {
+            "success": "boolean"
+          }
+        }
+      ]
+    },
+    {
+      "group": "Transactions",
+      "prefix": "/api/transactions",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/transactions",
+          "description": "List transactions with filters, search and pagination",
+          "auth": true,
+          "query": {
+            "filter": "string? (metal|crypto|stock)",
+            "search": "string?",
+            "page": "number? (default 1)",
+            "limit": "number? (default 20)"
+          },
+          "response": {
+            "data": [
+              {
+                "id": "string (UUID)",
+                "date": "string (ISO 8601)",
+                "assetType": "metal|crypto|stock",
+                "assetCode": "string",
+                "action": "MUA|BAN",
+                "quantity": "number",
+                "unitPrice": "number",
+                "note": "string?",
+                "icon": "string",
+                "iconBg": "string"
+              }
+            ],
+            "meta": "PaginationMeta"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/transactions/recent",
+          "description": "Get recent transactions",
+          "auth": true,
+          "query": {
+            "limit": "number? (default 4)"
+          },
+          "response": [
+            {
+              "id": "string (UUID)",
+              "date": "string (ISO 8601)",
+              "assetType": "metal|crypto|stock",
+              "assetCode": "string",
+              "action": "MUA|BAN",
+              "quantity": "number",
+              "unitPrice": "number",
+              "note": "string?",
+              "icon": "string",
+              "iconBg": "string"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/transactions",
+          "description": "Create new transaction",
+          "auth": true,
+          "requestBody": {
+            "date": "string (ISO 8601, required)",
+            "assetType": "metal|crypto|stock (required)",
+            "assetCode": "string (required)",
+            "action": "MUA|BAN (required)",
+            "quantity": "number (positive, required)",
+            "unitPrice": "number (positive, required)",
+            "note": "string?",
+            "icon": "string (required)",
+            "iconBg": "string (required)"
+          },
+          "response": {
+            "id": "string (UUID)",
+            "date": "string (ISO 8601)",
+            "assetType": "metal|crypto|stock",
+            "assetCode": "string",
+            "action": "MUA|BAN",
+            "quantity": "number",
+            "unitPrice": "number",
+            "note": "string?",
+            "icon": "string",
+            "iconBg": "string"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/transactions/:id",
+          "description": "Delete transaction by ID",
+          "auth": true,
+          "params": {
+            "id": "string (UUID)"
+          },
+          "response": {
+            "success": "boolean"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/transactions/bulk-delete",
+          "description": "Bulk delete transactions",
+          "auth": true,
+          "requestBody": {
+            "ids": "string[] (UUID array, required)"
+          },
+          "response": {
+            "deleted": "number"
+          }
+        }
+      ]
+    },
+    {
+      "group": "Prices",
+      "prefix": "/api/prices",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/prices",
+          "description": "Get all prices, optionally filtered by type",
+          "auth": true,
+          "query": {
+            "type": "string? (metal|crypto|stock)"
+          },
+          "response": [
+            {
+              "id": "string (UUID)",
+              "code": "string",
+              "icon": "string",
+              "type": "metal|crypto|stock",
+              "price": "number",
+              "updatedAt": "string (ISO 8601)"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/prices",
+          "description": "Create or update price entry",
+          "auth": true,
+          "requestBody": {
+            "code": "string (required)",
+            "icon": "string (required)",
+            "type": "metal|crypto|stock (required)",
+            "price": "number (min 0, required)"
+          },
+          "response": {
+            "id": "string (UUID)",
+            "code": "string",
+            "icon": "string",
+            "type": "metal|crypto|stock",
+            "price": "number",
+            "updatedAt": "string (ISO 8601)"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/prices/:code",
+          "description": "Update price by asset code",
+          "auth": true,
+          "params": {
+            "code": "string (asset code)"
+          },
+          "requestBody": {
+            "price": "number (min 0, required)"
+          },
+          "response": {
+            "id": "string (UUID)",
+            "code": "string",
+            "icon": "string",
+            "type": "metal|crypto|stock",
+            "price": "number",
+            "updatedAt": "string (ISO 8601)"
+          }
+        }
+      ]
+    },
+    {
+      "group": "Portfolio",
+      "prefix": "/api/portfolio",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/portfolio/summary",
+          "description": "Get portfolio summary (total value, profit, holdings count)",
+          "auth": true,
+          "response": {
+            "totalValue": "number (VND)",
+            "capitalInvested": "number (VND)",
+            "profit": "number (VND)",
+            "profitPercentage": "number (%)",
+            "assetsCount": "number",
+            "buyOrdersCount": "number",
+            "assetCodes": "string[]"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/portfolio/holdings",
+          "description": "Get current holdings breakdown",
+          "auth": true,
+          "response": [
+            {
+              "assetCode": "string",
+              "assetType": "metal|crypto|stock",
+              "name": "string",
+              "icon": "string",
+              "iconBg": "string",
+              "quantity": "number",
+              "averageCost": "number",
+              "currentPrice": "number",
+              "value": "number (VND)",
+              "profitLossPercent": "number (%)",
+              "profitLossAmount": "number (VND)",
+              "positive": "boolean"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/portfolio/allocation",
+          "description": "Get portfolio allocation breakdown by asset type",
+          "auth": true,
+          "response": [
+            {
+              "assetType": "metal|crypto|stock",
+              "label": "string",
+              "value": "number (%)",
+              "amount": "number (VND)"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/portfolio/profit-by-asset",
+          "description": "Get profit/loss per asset",
+          "auth": true,
+          "response": [
+            {
+              "symbol": "string",
+              "profitPercent": "number (%)",
+              "positive": "boolean"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/portfolio/history",
+          "description": "Get portfolio value history over time",
+          "auth": true,
+          "query": {
+            "period": "string? (1m|3m|6m|1y|all, default 6m)"
+          },
+          "response": {
+            "period": "string",
+            "points": [
+              {
+                "date": "string (ISO 8601)",
+                "value": "number (VND)"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "group": "Assets",
+      "prefix": "/api/assets",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/assets/:code",
+          "description": "Get detailed asset info (FIFO P&L, holdings, metrics)",
+          "auth": true,
+          "params": {
+            "code": "string (asset code)"
+          },
+          "response": {
+            "assetCode": "string",
+            "assetType": "metal|crypto|stock",
+            "icon": "string",
+            "iconBg": "string",
+            "metrics": {
+              "holdings": "number",
+              "avgCost": "number",
+              "currentPrice": "number",
+              "profit": "number"
+            },
+            "realizedPnl": {
+              "total": "number (VND)",
+              "transactions": [
+                {
+                  "date": "string",
+                  "quantity": "number",
+                  "buyPrice": "number",
+                  "sellPrice": "number",
+                  "pnl": "number"
+                }
+              ]
+            },
+            "unrealizedPnl": {
+              "total": "number (VND)",
+              "currentValue": "number (VND)",
+              "totalCost": "number (VND)"
+            },
+            "valueHistory": [
+              {
+                "date": "string (ISO 8601)",
+                "value": "number"
+              }
+            ]
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/assets/:code/transactions",
+          "description": "Get transactions for specific asset with pagination",
+          "auth": true,
+          "params": {
+            "code": "string (asset code)"
+          },
+          "query": {
+            "period": "string? (1m|3m|6m|1y|all, default 1y)",
+            "page": "number? (default 1)",
+            "limit": "number? (default 20)"
+          },
+          "response": {
+            "data": [
+              {
+                "id": "string (UUID)",
+                "date": "string (ISO 8601)",
+                "action": "MUA|BAN",
+                "quantity": "number",
+                "unitPrice": "number",
+                "total": "number",
+                "note": "string?"
+              }
+            ],
+            "meta": "PaginationMeta"
+          }
+        }
+      ]
+    },
+    {
+      "group": "Allocation",
+      "prefix": "/api/allocation",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/allocation/current",
+          "description": "Get current allocation vs targets",
+          "auth": true,
+          "response": [
+            {
+              "assetType": "metal|crypto|stock",
+              "name": "string",
+              "value": "number (VND)",
+              "actualPercent": "number (%)",
+              "targetPercent": "number (%)",
+              "status": "on-target|overweight|underweight"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/api/allocation/targets",
+          "description": "Set allocation targets (must sum to 100%)",
+          "auth": true,
+          "requestBody": {
+            "targets": [
+              {
+                "assetType": "metal|crypto|stock (required)",
+                "targetPercent": "number (0-100, required)"
+              }
+            ]
+          },
+          "response": {
+            "success": "boolean",
+            "total": "number (should be 100)"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/allocation/recommendation",
+          "description": "Get rebalancing recommendations",
+          "auth": true,
+          "response": {
+            "actions": [
+              {
+                "assetType": "metal|crypto|stock",
+                "action": "buy|sell",
+                "amount": "number (VND)",
+                "description": "string"
+              }
+            ],
+            "summary": "string"
+          }
+        }
+      ]
+    },
+    {
+      "group": "Reports",
+      "prefix": "/api/reports",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/reports/performance",
+          "description": "Get performance data by asset type over time",
+          "auth": true,
+          "query": {
+            "period": "string? (1m|3m|6m|1y|all, default all)"
+          },
+          "response": {
+            "months": "string[]",
+            "series": {
+              "metal": "number[]",
+              "crypto": "number[]",
+              "stock": "number[]"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/summary",
+          "description": "Get financial summary (deposited, withdrawn, realized & unrealized PnL)",
+          "auth": true,
+          "query": {
+            "period": "string? (1m|3m|6m|1y|all, default all)"
+          },
+          "response": {
+            "totalDeposited": "number (VND)",
+            "totalWithdrawn": "number (VND)",
+            "realizedPnl": "number (VND)",
+            "unrealizedPnl": "number (VND)"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/cash-flow",
+          "description": "Get monthly cash flow (inflow/outflow)",
+          "auth": true,
+          "query": {
+            "period": "string? (1m|3m|6m|1y|all, default all)"
+          },
+          "response": [
+            {
+              "month": "string (YYYY-MM)",
+              "inflow": "number (VND)",
+              "outflow": "number (VND)"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/top-assets",
+          "description": "Get top performing assets ranked by portfolio value",
+          "auth": true,
+          "query": {
+            "period": "string? (default all)",
+            "limit": "number? (default 5)"
+          },
+          "response": [
+            {
+              "rank": "number",
+              "assetCode": "string",
+              "name": "string",
+              "icon": "string",
+              "invested": "number (VND)",
+              "currentValue": "number (VND)",
+              "profitLossPercent": "number (%)",
+              "profitLossAmount": "number (VND)",
+              "positive": "boolean",
+              "weight": "number (%)"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/performance-comparison",
+          "description": "Compare performance across all held assets",
+          "auth": true,
+          "response": [
+            {
+              "name": "string",
+              "assetCode": "string",
+              "invested": "number (VND)",
+              "currentValue": "number (VND)",
+              "profitPercent": "number (%)",
+              "positive": "boolean"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/dca-chart",
+          "description": "Get DCA chart data for an asset (purchase amounts & running avg cost)",
+          "auth": true,
+          "query": {
+            "code": "string (required, asset code)"
+          },
+          "response": {
+            "assetCode": "string",
+            "numPurchases": "number",
+            "avgIntervalDays": "number",
+            "avgPerPurchase": "number (VND)",
+            "purchaseAmounts": "number[]",
+            "avgCostPrices": "number[]",
+            "currentPrice": "number"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/dca-history",
+          "description": "Get DCA purchase history for an asset",
+          "auth": true,
+          "query": {
+            "code": "string (required, asset code)"
+          },
+          "response": [
+            {
+              "number": "number (sequence)",
+              "date": "string (ISO 8601)",
+              "unitPrice": "number",
+              "quantity": "number",
+              "total": "number (VND)"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/dca-comparison",
+          "description": "Compare DCA vs lump sum investment strategy for an asset",
+          "auth": true,
+          "query": {
+            "code": "string (required, asset code)"
+          },
+          "response": {
+            "dca": {
+              "avgCost": "number",
+              "totalCapital": "number (VND)",
+              "currentValue": "number (VND)",
+              "profit": "number (VND)",
+              "profitPercent": "number (%)"
+            },
+            "lumpSum": {
+              "priceAtFirstBuy": "number",
+              "totalCapital": "number (VND)",
+              "currentValue": "number (VND)",
+              "profit": "number (VND)",
+              "profitPercent": "number (%)"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
