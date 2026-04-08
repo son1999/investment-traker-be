@@ -1,15 +1,19 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { Response } from 'express';
+import { I18nService } from '../../i18n/i18n.service.js';
 
+@Injectable()
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  constructor(private i18n: I18nService) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
-    let error = 'Internal Server Error';
+    let message = this.i18n.t('INTERNAL_SERVER_ERROR');
+    let error = this.i18n.t('INTERNAL_SERVER_ERROR');
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -33,12 +37,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   private getErrorName(status: number): string {
     const names: Record<number, string> = {
-      400: 'Bad Request',
-      401: 'Unauthorized',
-      403: 'Forbidden',
-      404: 'Not Found',
-      409: 'Conflict',
-      500: 'Internal Server Error',
+      400: this.i18n.t('BAD_REQUEST'),
+      401: this.i18n.t('UNAUTHORIZED'),
+      403: this.i18n.t('FORBIDDEN'),
+      404: this.i18n.t('NOT_FOUND'),
+      409: this.i18n.t('CONFLICT'),
+      500: this.i18n.t('INTERNAL_SERVER_ERROR'),
     };
     return names[status] || 'Error';
   }

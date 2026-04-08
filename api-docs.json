@@ -3,7 +3,18 @@
   "auth": {
     "type": "Bearer",
     "header": "Authorization",
-    "description": "All endpoints except POST /api/auth/login require Bearer token"
+    "description": "All endpoints except POST /api/auth/login require Bearer token in header: Authorization: Bearer <accessToken>"
+  },
+  "i18n": {
+    "header": "Accept-Language",
+    "supported": ["en", "vi"],
+    "default": "en",
+    "description": "Send Accept-Language header to receive localized error messages and response texts. Example: Accept-Language: vi"
+  },
+  "commonHeaders": {
+    "Authorization": "Bearer <accessToken> (required for all endpoints except login)",
+    "Accept-Language": "en | vi (optional, default: en)",
+    "Content-Type": "application/json"
   },
   "commonTypes": {
     "AssetType": ["metal", "crypto", "stock"],
@@ -17,6 +28,29 @@
       "pages": "number"
     }
   },
+  "responseWrapping": {
+    "description": "All successful responses are wrapped by TransformInterceptor",
+    "singleObject": "{ data: T }",
+    "array": "{ data: T[] }",
+    "paginated": "{ data: T[], meta: PaginationMeta } (returned as-is)",
+    "errorResponse": {
+      "statusCode": "number",
+      "message": "string (localized based on Accept-Language)",
+      "error": "string (localized error type name)"
+    },
+    "errorExamples": {
+      "en": {
+        "statusCode": 401,
+        "message": "Invalid email or password",
+        "error": "Unauthorized"
+      },
+      "vi": {
+        "statusCode": 401,
+        "message": "Email hoặc mật khẩu không đúng",
+        "error": "Chưa xác thực"
+      }
+    }
+  },
   "endpoints": [
     {
       "group": "Auth",
@@ -27,16 +61,41 @@
           "path": "/api/auth/login",
           "description": "Login with email/password",
           "auth": false,
+          "requestHeaders": {
+            "Accept-Language": "en | vi (optional)"
+          },
           "requestBody": {
             "email": "string (email format, required)",
             "password": "string (min 6 chars, required)"
           },
+          "requestExample": {
+            "email": "user@example.com",
+            "password": "password123"
+          },
           "response": {
-            "accessToken": "string",
-            "refreshToken": "string",
-            "user": {
-              "id": "string (UUID)",
-              "email": "string"
+            "data": {
+              "accessToken": "string (JWT)",
+              "refreshToken": "string (JWT)",
+              "user": {
+                "id": "string (UUID)",
+                "email": "string"
+              }
+            }
+          },
+          "responseExample": {
+            "data": {
+              "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+              "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
+              "user": {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "email": "user@example.com"
+              }
+            }
+          },
+          "errors": {
+            "401": {
+              "en": "Invalid email or password",
+              "vi": "Email hoặc mật khẩu không đúng"
             }
           }
         },
@@ -45,9 +104,159 @@
           "path": "/api/auth/logout",
           "description": "Logout current user",
           "auth": true,
+          "requestHeaders": {
+            "Authorization": "Bearer <accessToken>"
+          },
           "requestBody": null,
           "response": {
-            "success": "boolean"
+            "data": {
+              "success": "boolean"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "success": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "group": "Currencies",
+      "prefix": "/api/currencies",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/currencies",
+          "description": "List all currencies with exchange rates to VND",
+          "auth": true,
+          "response": {
+            "data": [
+              {
+                "id": "string (UUID)",
+                "code": "string (e.g. USDT, USD, VND)",
+                "name": "string (e.g. Tether, US Dollar)",
+                "symbol": "string (e.g. ₮, $, ₫)",
+                "rateToVnd": "number (exchange rate to VND, e.g. 25400)",
+                "createdAt": "string (ISO 8601)",
+                "updatedAt": "string (ISO 8601)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "code": "USDT",
+                "name": "Tether",
+                "symbol": "₮",
+                "rateToVnd": 25400,
+                "createdAt": "2025-01-01T00:00:00.000Z",
+                "updatedAt": "2025-06-01T10:30:00.000Z"
+              },
+              {
+                "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+                "code": "USD",
+                "name": "US Dollar",
+                "symbol": "$",
+                "rateToVnd": 25800,
+                "createdAt": "2025-01-01T00:00:00.000Z",
+                "updatedAt": "2025-06-01T10:30:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/currencies",
+          "description": "Create a new currency with exchange rate. VND is built-in (rate=1) and does not need to be created.",
+          "auth": true,
+          "requestBody": {
+            "code": "string (required, unique per user, e.g. 'USDT')",
+            "name": "string (required, e.g. 'Tether')",
+            "symbol": "string (required, e.g. '₮')",
+            "rateToVnd": "number (required, min 0, exchange rate to VND)"
+          },
+          "requestExample": {
+            "code": "USDT",
+            "name": "Tether",
+            "symbol": "₮",
+            "rateToVnd": 25400
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "code": "string",
+              "name": "string",
+              "symbol": "string",
+              "rateToVnd": "number",
+              "createdAt": "string (ISO 8601)",
+              "updatedAt": "string (ISO 8601)"
+            }
+          },
+          "errors": {
+            "409": {
+              "en": "Currency {code} already exists",
+              "vi": "Loại tiền {code} đã tồn tại"
+            }
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/currencies/:code",
+          "description": "Update currency info or exchange rate. Use this to update rateToVnd when rates change (manually or via external API later).",
+          "auth": true,
+          "params": {
+            "code": "string (currency code, required)"
+          },
+          "requestBody": {
+            "name": "string? (optional)",
+            "symbol": "string? (optional)",
+            "rateToVnd": "number? (optional, min 0)"
+          },
+          "requestExample": {
+            "rateToVnd": 25500
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "code": "string",
+              "name": "string",
+              "symbol": "string",
+              "rateToVnd": "number",
+              "createdAt": "string (ISO 8601)",
+              "updatedAt": "string (ISO 8601)"
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Currency {code} not found",
+              "vi": "Không tìm thấy loại tiền {code}"
+            }
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/currencies/:code",
+          "description": "Delete a currency. Only allowed if no assets are using this currency.",
+          "auth": true,
+          "params": {
+            "code": "string (currency code, required)"
+          },
+          "response": {
+            "data": {
+              "success": "boolean"
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Currency {code} not found",
+              "vi": "Không tìm thấy loại tiền {code}"
+            },
+            "409": {
+              "en": "Cannot delete currency {code}. {count} assets are using it.",
+              "vi": "Không thể xóa loại tiền {code}. Có {count} tài sản đang sử dụng."
+            }
           }
         }
       ]
@@ -62,103 +271,183 @@
           "description": "List transactions with filters, search and pagination",
           "auth": true,
           "query": {
-            "filter": "string? (metal|crypto|stock)",
-            "search": "string?",
-            "page": "number? (default 1)",
-            "limit": "number? (default 20)"
+            "filter": "string? (metal|crypto|stock) - filter by asset type",
+            "search": "string? - search by asset code (case insensitive)",
+            "page": "number? (default 1, min 1)",
+            "limit": "number? (default 20, positive integer)"
           },
+          "requestExample": "/api/transactions?filter=metal&search=SJC&page=1&limit=10",
           "response": {
             "data": [
               {
                 "id": "string (UUID)",
-                "date": "string (ISO 8601)",
+                "date": "string (YYYY-MM-DD)",
                 "assetType": "metal|crypto|stock",
                 "assetCode": "string",
                 "action": "MUA|BAN",
                 "quantity": "number",
                 "unitPrice": "number",
-                "note": "string?",
-                "icon": "string",
-                "iconBg": "string"
+                "note": "string|null",
+                "icon": "string (emoji)",
+                "iconBg": "string (CSS color)"
               }
             ],
-            "meta": "PaginationMeta"
+            "meta": {
+              "total": "number",
+              "page": "number",
+              "limit": "number",
+              "pages": "number"
+            }
+          },
+          "responseExample": {
+            "data": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "date": "2025-01-15",
+                "assetType": "metal",
+                "assetCode": "SJC",
+                "action": "MUA",
+                "quantity": 2,
+                "unitPrice": 82500000,
+                "note": "Mua vàng đầu năm",
+                "icon": "🥇",
+                "iconBg": "rgba(248,160,16,0.2)"
+              }
+            ],
+            "meta": {
+              "total": 50,
+              "page": 1,
+              "limit": 10,
+              "pages": 5
+            }
           }
         },
         {
           "method": "GET",
           "path": "/api/transactions/recent",
-          "description": "Get recent transactions",
+          "description": "Get most recent transactions",
           "auth": true,
           "query": {
             "limit": "number? (default 4)"
           },
-          "response": [
-            {
+          "requestExample": "/api/transactions/recent?limit=4",
+          "response": {
+            "data": [
+              {
+                "id": "string (UUID)",
+                "date": "string (YYYY-MM-DD)",
+                "assetType": "metal|crypto|stock",
+                "assetCode": "string",
+                "action": "MUA|BAN",
+                "quantity": "number",
+                "unitPrice": "number",
+                "note": "string|null",
+                "icon": "string (emoji)",
+                "iconBg": "string (CSS color)"
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/transactions",
+          "description": "Create new transaction. If action is BAN (sell), validates sufficient holdings.",
+          "auth": true,
+          "requestBody": {
+            "date": "string (ISO 8601, required)",
+            "assetType": "metal|crypto|stock (required, enum)",
+            "assetCode": "string (required)",
+            "action": "MUA|BAN (required, enum)",
+            "quantity": "number (positive, required)",
+            "unitPrice": "number (positive, required)",
+            "note": "string? (optional)",
+            "icon": "string (required, emoji)",
+            "iconBg": "string (required, CSS color)"
+          },
+          "requestExample": {
+            "date": "2025-01-15",
+            "assetType": "metal",
+            "assetCode": "SJC",
+            "action": "MUA",
+            "quantity": 2,
+            "unitPrice": 82500000,
+            "note": "Mua vàng đầu năm",
+            "icon": "🥇",
+            "iconBg": "rgba(248,160,16,0.2)"
+          },
+          "response": {
+            "data": {
               "id": "string (UUID)",
-              "date": "string (ISO 8601)",
+              "date": "string (YYYY-MM-DD)",
               "assetType": "metal|crypto|stock",
               "assetCode": "string",
               "action": "MUA|BAN",
               "quantity": "number",
               "unitPrice": "number",
-              "note": "string?",
+              "note": "string|null",
               "icon": "string",
               "iconBg": "string"
             }
-          ]
-        },
-        {
-          "method": "POST",
-          "path": "/api/transactions",
-          "description": "Create new transaction",
-          "auth": true,
-          "requestBody": {
-            "date": "string (ISO 8601, required)",
-            "assetType": "metal|crypto|stock (required)",
-            "assetCode": "string (required)",
-            "action": "MUA|BAN (required)",
-            "quantity": "number (positive, required)",
-            "unitPrice": "number (positive, required)",
-            "note": "string?",
-            "icon": "string (required)",
-            "iconBg": "string (required)"
           },
-          "response": {
-            "id": "string (UUID)",
-            "date": "string (ISO 8601)",
-            "assetType": "metal|crypto|stock",
-            "assetCode": "string",
-            "action": "MUA|BAN",
-            "quantity": "number",
-            "unitPrice": "number",
-            "note": "string?",
-            "icon": "string",
-            "iconBg": "string"
+          "errors": {
+            "400 (asset not registered)": {
+              "en": "Asset {code} is not registered. Please create the asset first.",
+              "vi": "Tài sản {code} chưa được đăng ký. Vui lòng tạo tài sản trước."
+            },
+            "400 (insufficient holdings)": {
+              "en": "Insufficient holdings. Available: {available}, requested: {requested}",
+              "vi": "Không đủ số lượng nắm giữ. Khả dụng: {available}, yêu cầu: {requested}"
+            }
           }
         },
         {
           "method": "DELETE",
           "path": "/api/transactions/:id",
-          "description": "Delete transaction by ID",
+          "description": "Delete a single transaction by ID",
           "auth": true,
           "params": {
-            "id": "string (UUID)"
+            "id": "string (UUID, required)"
           },
           "response": {
-            "success": "boolean"
+            "data": {
+              "success": "boolean"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "success": true
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Transaction not found",
+              "vi": "Không tìm thấy giao dịch"
+            }
           }
         },
         {
           "method": "POST",
           "path": "/api/transactions/bulk-delete",
-          "description": "Bulk delete transactions",
+          "description": "Bulk delete multiple transactions by IDs",
           "auth": true,
           "requestBody": {
-            "ids": "string[] (UUID array, required)"
+            "ids": "string[] (UUID array, required, each must be valid UUID v4)"
+          },
+          "requestExample": {
+            "ids": [
+              "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+            ]
           },
           "response": {
-            "deleted": "number"
+            "data": {
+              "deleted": "number (count of deleted transactions)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "deleted": 2
+            }
           }
         }
       ]
@@ -170,13 +459,56 @@
         {
           "method": "GET",
           "path": "/api/prices",
-          "description": "Get all prices, optionally filtered by type",
+          "description": "Get all prices, optionally filtered by asset type",
           "auth": true,
           "query": {
             "type": "string? (metal|crypto|stock)"
           },
-          "response": [
-            {
+          "requestExample": "/api/prices?type=metal",
+          "response": {
+            "data": [
+              {
+                "id": "string (UUID)",
+                "code": "string",
+                "icon": "string (emoji)",
+                "type": "metal|crypto|stock",
+                "price": "number",
+                "updatedAt": "string (ISO 8601)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "code": "SJC",
+                "icon": "🥇",
+                "type": "metal",
+                "price": 92500000,
+                "updatedAt": "2025-06-01T10:30:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/prices",
+          "description": "Create or update price entry. Returns 201 for new, 200 for update.",
+          "auth": true,
+          "requestBody": {
+            "code": "string (required)",
+            "icon": "string (required, emoji)",
+            "type": "metal|crypto|stock (required, enum)",
+            "price": "number (min 0, required)"
+          },
+          "requestExample": {
+            "code": "SJC",
+            "icon": "🥇",
+            "type": "metal",
+            "price": 92500000
+          },
+          "response": {
+            "data": {
               "id": "string (UUID)",
               "code": "string",
               "icon": "string",
@@ -184,26 +516,6 @@
               "price": "number",
               "updatedAt": "string (ISO 8601)"
             }
-          ]
-        },
-        {
-          "method": "POST",
-          "path": "/api/prices",
-          "description": "Create or update price entry",
-          "auth": true,
-          "requestBody": {
-            "code": "string (required)",
-            "icon": "string (required)",
-            "type": "metal|crypto|stock (required)",
-            "price": "number (min 0, required)"
-          },
-          "response": {
-            "id": "string (UUID)",
-            "code": "string",
-            "icon": "string",
-            "type": "metal|crypto|stock",
-            "price": "number",
-            "updatedAt": "string (ISO 8601)"
           }
         },
         {
@@ -212,18 +524,29 @@
           "description": "Update price by asset code",
           "auth": true,
           "params": {
-            "code": "string (asset code)"
+            "code": "string (asset code, required)"
           },
           "requestBody": {
             "price": "number (min 0, required)"
           },
+          "requestExample": {
+            "price": 95000000
+          },
           "response": {
-            "id": "string (UUID)",
-            "code": "string",
-            "icon": "string",
-            "type": "metal|crypto|stock",
-            "price": "number",
-            "updatedAt": "string (ISO 8601)"
+            "data": {
+              "id": "string (UUID)",
+              "code": "string",
+              "icon": "string",
+              "type": "metal|crypto|stock",
+              "price": "number",
+              "updatedAt": "string (ISO 8601)"
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Price for {code} not found",
+              "vi": "Không tìm thấy giá cho {code}"
+            }
           }
         }
       ]
@@ -235,83 +558,148 @@
         {
           "method": "GET",
           "path": "/api/portfolio/summary",
-          "description": "Get portfolio summary (total value, profit, holdings count)",
+          "description": "Get portfolio summary including total value, profit, and holdings count",
           "auth": true,
           "response": {
-            "totalValue": "number (VND)",
-            "capitalInvested": "number (VND)",
-            "profit": "number (VND)",
-            "profitPercentage": "number (%)",
-            "assetsCount": "number",
-            "buyOrdersCount": "number",
-            "assetCodes": "string[]"
+            "data": {
+              "totalValue": "number (VND, current portfolio value)",
+              "capitalInvested": "number (VND, total invested capital)",
+              "profit": "number (VND, unrealized profit)",
+              "profitPercentage": "number (%, profit/capital ratio)",
+              "assetsCount": "number (distinct assets held)",
+              "buyOrdersCount": "number (total buy orders)",
+              "assetCodes": "string[] (list of held asset codes)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "totalValue": 500000000,
+              "capitalInvested": 450000000,
+              "profit": 50000000,
+              "profitPercentage": 11.11,
+              "assetsCount": 5,
+              "buyOrdersCount": 12,
+              "assetCodes": ["SJC", "BTC", "ETH", "VNM", "FPT"]
+            }
           }
         },
         {
           "method": "GET",
           "path": "/api/portfolio/holdings",
-          "description": "Get current holdings breakdown",
+          "description": "Get current holdings breakdown with cost basis and profit/loss per asset",
           "auth": true,
-          "response": [
-            {
-              "assetCode": "string",
-              "assetType": "metal|crypto|stock",
-              "name": "string",
-              "icon": "string",
-              "iconBg": "string",
-              "quantity": "number",
-              "averageCost": "number",
-              "currentPrice": "number",
-              "value": "number (VND)",
-              "profitLossPercent": "number (%)",
-              "profitLossAmount": "number (VND)",
-              "positive": "boolean"
-            }
-          ]
+          "response": {
+            "data": [
+              {
+                "assetCode": "string",
+                "assetType": "metal|crypto|stock",
+                "name": "string",
+                "icon": "string (emoji)",
+                "iconBg": "string (CSS color)",
+                "quantity": "number",
+                "averageCost": "number (VND per unit)",
+                "currentPrice": "number (per unit in asset currency)",
+                "currency": "string (asset currency code)",
+                "value": "number (VND, total current value converted via rateToVnd)",
+                "profitLossPercent": "number (%)",
+                "profitLossAmount": "number (VND)",
+                "positive": "boolean"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "assetCode": "SJC",
+                "assetType": "metal",
+                "name": "SJC",
+                "icon": "🥇",
+                "iconBg": "rgba(248,160,16,0.2)",
+                "quantity": 2,
+                "averageCost": 82500000,
+                "currentPrice": 92500000,
+                "value": 185000000,
+                "profitLossPercent": 12.12,
+                "profitLossAmount": 20000000,
+                "positive": true
+              }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/portfolio/allocation",
-          "description": "Get portfolio allocation breakdown by asset type",
+          "description": "Get portfolio allocation breakdown by asset type (metal, crypto, stock)",
           "auth": true,
-          "response": [
-            {
-              "assetType": "metal|crypto|stock",
-              "label": "string",
-              "value": "number (%)",
-              "amount": "number (VND)"
-            }
-          ]
+          "response": {
+            "data": [
+              {
+                "assetType": "metal|crypto|stock",
+                "label": "string (display name: Metal, Crypto, Stock)",
+                "value": "number (% allocation)",
+                "amount": "number (VND)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              { "assetType": "metal", "label": "Metal", "value": 40, "amount": 200000000 },
+              { "assetType": "crypto", "label": "Crypto", "value": 35, "amount": 175000000 },
+              { "assetType": "stock", "label": "Stock", "value": 25, "amount": 125000000 }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/portfolio/profit-by-asset",
-          "description": "Get profit/loss per asset",
+          "description": "Get profit/loss percentage per asset, sorted by profit descending",
           "auth": true,
-          "response": [
-            {
-              "symbol": "string",
-              "profitPercent": "number (%)",
-              "positive": "boolean"
-            }
-          ]
+          "response": {
+            "data": [
+              {
+                "symbol": "string (asset code)",
+                "profitPercent": "number (%)",
+                "positive": "boolean"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              { "symbol": "BTC", "profitPercent": 25.5, "positive": true },
+              { "symbol": "SJC", "profitPercent": 12.12, "positive": true },
+              { "symbol": "VNM", "profitPercent": -3.5, "positive": false }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/portfolio/history",
-          "description": "Get portfolio value history over time",
+          "description": "Get portfolio value history over time (monthly data points)",
           "auth": true,
           "query": {
             "period": "string? (1m|3m|6m|1y|all, default 6m)"
           },
+          "requestExample": "/api/portfolio/history?period=1y",
           "response": {
-            "period": "string",
-            "points": [
-              {
-                "date": "string (ISO 8601)",
-                "value": "number (VND)"
-              }
-            ]
+            "data": {
+              "period": "string",
+              "points": [
+                {
+                  "date": "string (YYYY-MM-DD)",
+                  "value": "number (VND)"
+                }
+              ]
+            }
+          },
+          "responseExample": {
+            "data": {
+              "period": "1y",
+              "points": [
+                { "date": "2024-07-01", "value": 300000000 },
+                { "date": "2024-08-01", "value": 320000000 },
+                { "date": "2025-06-01", "value": 500000000 }
+              ]
+            }
           }
         }
       ]
@@ -322,74 +710,318 @@
       "routes": [
         {
           "method": "GET",
-          "path": "/api/assets/:code",
-          "description": "Get detailed asset info (FIFO P&L, holdings, metrics)",
+          "path": "/api/assets",
+          "description": "List all registered investment assets, optionally filtered by type",
           "auth": true,
-          "params": {
-            "code": "string (asset code)"
+          "query": {
+            "type": "string? (metal|crypto|stock)"
           },
+          "requestExample": "/api/assets?type=metal",
           "response": {
-            "assetCode": "string",
-            "assetType": "metal|crypto|stock",
-            "icon": "string",
-            "iconBg": "string",
-            "metrics": {
-              "holdings": "number",
-              "avgCost": "number",
-              "currentPrice": "number",
-              "profit": "number"
-            },
-            "realizedPnl": {
-              "total": "number (VND)",
-              "transactions": [
-                {
-                  "date": "string",
-                  "quantity": "number",
-                  "buyPrice": "number",
-                  "sellPrice": "number",
-                  "pnl": "number"
-                }
-              ]
-            },
-            "unrealizedPnl": {
-              "total": "number (VND)",
-              "currentValue": "number (VND)",
-              "totalCost": "number (VND)"
-            },
-            "valueHistory": [
+            "data": [
               {
-                "date": "string (ISO 8601)",
-                "value": "number"
+                "id": "string (UUID)",
+                "code": "string",
+                "name": "string",
+                "type": "metal|crypto|stock",
+                "currency": "string (currency code, default VND)",
+                "icon": "string (emoji)",
+                "iconBg": "string (CSS color)",
+                "createdAt": "string (ISO 8601)",
+                "updatedAt": "string (ISO 8601)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "code": "SJC",
+                "name": "Vàng SJC",
+                "type": "metal",
+                "currency": "VND",
+                "icon": "🥇",
+                "iconBg": "rgba(248,160,16,0.2)",
+                "createdAt": "2025-01-01T00:00:00.000Z",
+                "updatedAt": "2025-01-01T00:00:00.000Z"
               }
             ]
           }
         },
         {
-          "method": "GET",
-          "path": "/api/assets/:code/transactions",
-          "description": "Get transactions for specific asset with pagination",
+          "method": "POST",
+          "path": "/api/assets",
+          "description": "Create a new investment asset. Must be created before adding transactions for this asset.",
+          "auth": true,
+          "requestBody": {
+            "code": "string (required, unique per user, e.g. 'SJC', 'BTC', 'VNM')",
+            "name": "string (required, display name, e.g. 'Vàng SJC')",
+            "type": "metal|crypto|stock (required, enum)",
+            "currency": "string? (optional, default 'VND', must be a registered currency code)",
+            "icon": "string (required, emoji, e.g. '🥇')",
+            "iconBg": "string (required, CSS color, e.g. 'rgba(248,160,16,0.2)')"
+          },
+          "requestExample": {
+            "code": "SJC",
+            "name": "Vàng SJC",
+            "type": "metal",
+            "currency": "VND",
+            "icon": "🥇",
+            "iconBg": "rgba(248,160,16,0.2)"
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "code": "string",
+              "name": "string",
+              "type": "metal|crypto|stock",
+              "icon": "string",
+              "iconBg": "string",
+              "createdAt": "string (ISO 8601)",
+              "updatedAt": "string (ISO 8601)"
+            }
+          },
+          "errors": {
+            "409": {
+              "en": "Asset {code} already exists",
+              "vi": "Tài sản {code} đã tồn tại"
+            }
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/assets/:code",
+          "description": "Update an existing asset's info (name, type, icon, iconBg). All fields are optional.",
           "auth": true,
           "params": {
-            "code": "string (asset code)"
+            "code": "string (asset code, required)"
+          },
+          "requestBody": {
+            "name": "string? (optional)",
+            "type": "metal|crypto|stock? (optional)",
+            "icon": "string? (optional)",
+            "iconBg": "string? (optional)"
+          },
+          "requestExample": {
+            "name": "Vàng SJC 9999",
+            "icon": "🏅"
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "code": "string",
+              "name": "string",
+              "type": "metal|crypto|stock",
+              "icon": "string",
+              "iconBg": "string",
+              "createdAt": "string (ISO 8601)",
+              "updatedAt": "string (ISO 8601)"
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Asset {code} not found",
+              "vi": "Không tìm thấy tài sản {code}"
+            }
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/assets/:code",
+          "description": "Delete an asset. Only allowed if no transactions exist for this asset.",
+          "auth": true,
+          "params": {
+            "code": "string (asset code, required)"
+          },
+          "response": {
+            "data": {
+              "success": "boolean"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "success": true
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Asset {code} not found",
+              "vi": "Không tìm thấy tài sản {code}"
+            },
+            "400": {
+              "en": "Cannot delete asset {code}. It has {count} transactions. Delete transactions first.",
+              "vi": "Không thể xóa tài sản {code}. Có {count} giao dịch liên quan. Hãy xóa giao dịch trước."
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/assets/:code/detail",
+          "description": "Get detailed asset info including FIFO P&L calculation, holdings metrics, realized/unrealized PnL, and value history",
+          "auth": true,
+          "params": {
+            "code": "string (asset code, required)"
+          },
+          "response": {
+            "data": {
+              "assetCode": "string",
+              "assetType": "metal|crypto|stock",
+              "icon": "string (emoji)",
+              "iconBg": "string (CSS color)",
+              "metrics": {
+                "holdings": {
+                  "quantity": "number (current net quantity)",
+                  "unit": "string (asset code)",
+                  "detail": "string (localized: '3 buy orders · 1 sell orders' or '3 lệnh mua · 1 lệnh bán')"
+                },
+                "avgCost": {
+                  "value": "number (VND, weighted average buy price)",
+                  "currency": "VND"
+                },
+                "currentPrice": {
+                  "value": "number (VND)",
+                  "currency": "VND",
+                  "updatedAt": "string|null (ISO 8601)"
+                },
+                "profit": {
+                  "amount": "number (VND, unrealized profit)",
+                  "percent": "number (%)",
+                  "positive": "boolean"
+                }
+              },
+              "realizedPnl": {
+                "total": "number (VND, total realized profit from sells)",
+                "transactions": [
+                  {
+                    "date": "string (YYYY-MM-DD)",
+                    "quantity": "number",
+                    "sellPrice": "number (VND per unit)",
+                    "profit": "number (VND, FIFO-calculated profit)"
+                  }
+                ]
+              },
+              "unrealizedPnl": {
+                "total": "number (VND, unrealized profit on remaining lots)",
+                "currentValue": "number (VND, current value of holdings)",
+                "totalCost": "number (VND, cost basis of remaining lots)"
+              },
+              "valueHistory": [
+                {
+                  "date": "string (YYYY-MM-DD)",
+                  "value": "number (VND, portfolio value at each transaction)"
+                }
+              ]
+            }
+          },
+          "responseExample": {
+            "data": {
+              "assetCode": "SJC",
+              "assetType": "metal",
+              "icon": "🥇",
+              "iconBg": "rgba(248,160,16,0.2)",
+              "metrics": {
+                "holdings": {
+                  "quantity": 2,
+                  "unit": "SJC",
+                  "detail": "3 buy orders · 1 sell orders"
+                },
+                "avgCost": {
+                  "value": 82500000,
+                  "currency": "VND"
+                },
+                "currentPrice": {
+                  "value": 92500000,
+                  "currency": "VND",
+                  "updatedAt": "2025-06-01T10:30:00.000Z"
+                },
+                "profit": {
+                  "amount": 20000000,
+                  "percent": 12.12,
+                  "positive": true
+                }
+              },
+              "realizedPnl": {
+                "total": 5000000,
+                "transactions": [
+                  {
+                    "date": "2025-03-15",
+                    "quantity": 1,
+                    "sellPrice": 88000000,
+                    "profit": 5000000
+                  }
+                ]
+              },
+              "unrealizedPnl": {
+                "total": 20000000,
+                "currentValue": 185000000,
+                "totalCost": 165000000
+              },
+              "valueHistory": [
+                { "date": "2025-01-15", "value": 82500000 },
+                { "date": "2025-02-10", "value": 165000000 },
+                { "date": "2025-03-15", "value": 92500000 },
+                { "date": "2025-04-20", "value": 185000000 }
+              ]
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Asset {code} not found",
+              "vi": "Không tìm thấy tài sản {code}"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/assets/:code/transactions",
+          "description": "Get paginated transactions for a specific asset within a time period",
+          "auth": true,
+          "params": {
+            "code": "string (asset code, required)"
           },
           "query": {
             "period": "string? (1m|3m|6m|1y|all, default 1y)",
             "page": "number? (default 1)",
             "limit": "number? (default 20)"
           },
+          "requestExample": "/api/assets/SJC/transactions?period=1y&page=1&limit=10",
           "response": {
             "data": [
               {
                 "id": "string (UUID)",
-                "date": "string (ISO 8601)",
+                "date": "string (YYYY-MM-DD)",
                 "action": "MUA|BAN",
                 "quantity": "number",
-                "unitPrice": "number",
-                "total": "number",
-                "note": "string?"
+                "unitPrice": "number (VND)",
+                "total": "number (VND, quantity × unitPrice)",
+                "note": "string|null"
               }
             ],
-            "meta": "PaginationMeta"
+            "meta": {
+              "total": "number",
+              "page": "number",
+              "limit": "number",
+              "pages": "number"
+            }
+          },
+          "responseExample": {
+            "data": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "date": "2025-04-20",
+                "action": "MUA",
+                "quantity": 1,
+                "unitPrice": 92500000,
+                "total": 92500000,
+                "note": null
+              }
+            ],
+            "meta": {
+              "total": 4,
+              "page": 1,
+              "limit": 10,
+              "pages": 1
+            }
           }
         }
       ]
@@ -401,52 +1033,143 @@
         {
           "method": "GET",
           "path": "/api/allocation/current",
-          "description": "Get current allocation vs targets",
+          "description": "Get current allocation vs strategic targets. Status is 'overweight' if actual > target + 2%, 'underweight' if actual < target - 2%, otherwise 'on-target'.",
           "auth": true,
-          "response": [
-            {
-              "assetType": "metal|crypto|stock",
-              "name": "string",
-              "value": "number (VND)",
-              "actualPercent": "number (%)",
-              "targetPercent": "number (%)",
-              "status": "on-target|overweight|underweight"
-            }
-          ]
+          "response": {
+            "data": [
+              {
+                "assetType": "metal|crypto|stock",
+                "name": "string (Metal, Crypto, Stock)",
+                "value": "number (VND, total value for this type)",
+                "actualPercent": "number (%, current allocation)",
+                "targetPercent": "number (%, target allocation)",
+                "status": "on-target|overweight|underweight"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "assetType": "metal",
+                "name": "Metal",
+                "value": 200000000,
+                "actualPercent": 40,
+                "targetPercent": 30,
+                "status": "overweight"
+              },
+              {
+                "assetType": "crypto",
+                "name": "Crypto",
+                "value": 175000000,
+                "actualPercent": 35,
+                "targetPercent": 40,
+                "status": "underweight"
+              },
+              {
+                "assetType": "stock",
+                "name": "Stock",
+                "value": 125000000,
+                "actualPercent": 25,
+                "targetPercent": 30,
+                "status": "underweight"
+              }
+            ]
+          }
         },
         {
           "method": "POST",
           "path": "/api/allocation/targets",
-          "description": "Set allocation targets (must sum to 100%)",
+          "description": "Set allocation targets. All target percentages must sum to exactly 100%.",
           "auth": true,
           "requestBody": {
             "targets": [
               {
-                "assetType": "metal|crypto|stock (required)",
+                "assetType": "metal|crypto|stock (required, enum)",
                 "targetPercent": "number (0-100, required)"
               }
             ]
           },
+          "requestExample": {
+            "targets": [
+              { "assetType": "metal", "targetPercent": 30 },
+              { "assetType": "crypto", "targetPercent": 40 },
+              { "assetType": "stock", "targetPercent": 30 }
+            ]
+          },
           "response": {
-            "success": "boolean",
-            "total": "number (should be 100)"
+            "data": {
+              "success": "boolean",
+              "total": "number (sum of all targets, should be 100)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "success": true,
+              "total": 100
+            }
+          },
+          "errors": {
+            "400": {
+              "en": "Target percentages must sum to 100. Current total: {total}",
+              "vi": "Tổng phần trăm mục tiêu phải bằng 100. Tổng hiện tại: {total}"
+            }
           }
         },
         {
           "method": "GET",
           "path": "/api/allocation/recommendation",
-          "description": "Get rebalancing recommendations",
+          "description": "Get rebalancing recommendations based on current allocation vs targets. Only suggests actions if deviation > 2% of total portfolio value.",
           "auth": true,
           "response": {
-            "actions": [
-              {
-                "assetType": "metal|crypto|stock",
-                "action": "buy|sell",
-                "amount": "number (VND)",
-                "description": "string"
-              }
-            ],
-            "summary": "string"
+            "data": {
+              "actions": [
+                {
+                  "assetType": "metal|crypto|stock",
+                  "action": "buy|sell",
+                  "amount": "number (VND, recommended trade amount)",
+                  "description": "string (localized recommendation text)"
+                }
+              ],
+              "summary": "string (localized summary message)"
+            }
+          },
+          "responseExample_en": {
+            "data": {
+              "actions": [
+                {
+                  "assetType": "metal",
+                  "action": "sell",
+                  "amount": 50000000,
+                  "description": "Sell ~50M VND of Metal"
+                },
+                {
+                  "assetType": "crypto",
+                  "action": "buy",
+                  "amount": 25000000,
+                  "description": "Buy ~25M VND of Crypto"
+                }
+              ],
+              "summary": "Portfolio has deviated from strategic targets. Rebalancing recommended."
+            }
+          },
+          "responseExample_vi": {
+            "data": {
+              "actions": [
+                {
+                  "assetType": "metal",
+                  "action": "sell",
+                  "amount": 50000000,
+                  "description": "Bán ~50M VND Metal"
+                },
+                {
+                  "assetType": "crypto",
+                  "action": "buy",
+                  "amount": 25000000,
+                  "description": "Mua ~25M VND Crypto"
+                }
+              ],
+              "summary": "Danh mục đã lệch khỏi mục tiêu chiến lược. Khuyến nghị tái cân bằng."
+            }
           }
         }
       ]
@@ -458,153 +1181,305 @@
         {
           "method": "GET",
           "path": "/api/reports/performance",
-          "description": "Get performance data by asset type over time",
+          "description": "Get monthly performance data broken down by asset type over time",
           "auth": true,
           "query": {
             "period": "string? (1m|3m|6m|1y|all, default all)"
           },
+          "requestExample": "/api/reports/performance?period=1y",
           "response": {
-            "months": "string[]",
-            "series": {
-              "metal": "number[]",
-              "crypto": "number[]",
-              "stock": "number[]"
+            "data": {
+              "months": "string[] (month labels)",
+              "series": {
+                "metal": "number[] (VND value per month)",
+                "crypto": "number[] (VND value per month)",
+                "stock": "number[] (VND value per month)"
+              }
+            }
+          },
+          "responseExample": {
+            "data": {
+              "months": ["2025-01", "2025-02", "2025-03"],
+              "series": {
+                "metal": [100000000, 120000000, 150000000],
+                "crypto": [80000000, 90000000, 110000000],
+                "stock": [50000000, 55000000, 60000000]
+              }
             }
           }
         },
         {
           "method": "GET",
           "path": "/api/reports/summary",
-          "description": "Get financial summary (deposited, withdrawn, realized & unrealized PnL)",
+          "description": "Get financial summary including deposited/withdrawn amounts and realized/unrealized PnL (FIFO calculation)",
           "auth": true,
           "query": {
             "period": "string? (1m|3m|6m|1y|all, default all)"
           },
+          "requestExample": "/api/reports/summary?period=all",
           "response": {
-            "totalDeposited": "number (VND)",
-            "totalWithdrawn": "number (VND)",
-            "realizedPnl": "number (VND)",
-            "unrealizedPnl": "number (VND)"
+            "data": {
+              "totalDeposited": "number (VND, total buy amount)",
+              "totalWithdrawn": "number (VND, total sell amount)",
+              "realizedPnl": "number (VND, FIFO-calculated realized profit)",
+              "unrealizedPnl": "number (VND, unrealized profit on current holdings)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "totalDeposited": 450000000,
+              "totalWithdrawn": 100000000,
+              "realizedPnl": 15000000,
+              "unrealizedPnl": 50000000
+            }
           }
         },
         {
           "method": "GET",
           "path": "/api/reports/cash-flow",
-          "description": "Get monthly cash flow (inflow/outflow)",
+          "description": "Get monthly cash flow showing buy (inflow) and sell (outflow) amounts",
           "auth": true,
           "query": {
             "period": "string? (1m|3m|6m|1y|all, default all)"
           },
-          "response": [
-            {
-              "month": "string (YYYY-MM)",
-              "inflow": "number (VND)",
-              "outflow": "number (VND)"
-            }
-          ]
+          "requestExample": "/api/reports/cash-flow?period=1y",
+          "response": {
+            "data": [
+              {
+                "month": "string (YYYY-MM)",
+                "inflow": "number (VND, total buy amount)",
+                "outflow": "number (VND, total sell amount)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              { "month": "2025-01", "inflow": 82500000, "outflow": 0 },
+              { "month": "2025-02", "inflow": 50000000, "outflow": 0 },
+              { "month": "2025-03", "inflow": 0, "outflow": 88000000 }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/reports/top-assets",
-          "description": "Get top performing assets ranked by portfolio value",
+          "description": "Get top performing assets ranked by current portfolio value",
           "auth": true,
           "query": {
             "period": "string? (default all)",
             "limit": "number? (default 5)"
           },
-          "response": [
-            {
-              "rank": "number",
-              "assetCode": "string",
-              "name": "string",
-              "icon": "string",
-              "invested": "number (VND)",
-              "currentValue": "number (VND)",
-              "profitLossPercent": "number (%)",
-              "profitLossAmount": "number (VND)",
-              "positive": "boolean",
-              "weight": "number (%)"
-            }
-          ]
+          "requestExample": "/api/reports/top-assets?limit=3",
+          "response": {
+            "data": [
+              {
+                "rank": "number (1-based)",
+                "assetCode": "string",
+                "name": "string",
+                "icon": "string (emoji)",
+                "invested": "number (VND, cost basis)",
+                "currentValue": "number (VND)",
+                "profitLossPercent": "number (%)",
+                "profitLossAmount": "number (VND)",
+                "positive": "boolean",
+                "weight": "number (%, portfolio weight)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "rank": 1,
+                "assetCode": "SJC",
+                "name": "SJC",
+                "icon": "🥇",
+                "invested": 165000000,
+                "currentValue": 185000000,
+                "profitLossPercent": 12.12,
+                "profitLossAmount": 20000000,
+                "positive": true,
+                "weight": 37
+              }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/reports/performance-comparison",
-          "description": "Compare performance across all held assets",
+          "description": "Compare profit/loss performance across all currently held assets",
           "auth": true,
-          "response": [
-            {
-              "name": "string",
-              "assetCode": "string",
-              "invested": "number (VND)",
-              "currentValue": "number (VND)",
-              "profitPercent": "number (%)",
-              "positive": "boolean"
-            }
-          ]
+          "response": {
+            "data": [
+              {
+                "name": "string",
+                "assetCode": "string",
+                "invested": "number (VND, cost basis)",
+                "currentValue": "number (VND)",
+                "profitPercent": "number (%)",
+                "positive": "boolean"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "name": "SJC",
+                "assetCode": "SJC",
+                "invested": 165000000,
+                "currentValue": 185000000,
+                "profitPercent": 12.12,
+                "positive": true
+              },
+              {
+                "name": "BTC",
+                "assetCode": "BTC",
+                "invested": 100000000,
+                "currentValue": 125000000,
+                "profitPercent": 25,
+                "positive": true
+              }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/reports/dca-chart",
-          "description": "Get DCA chart data for an asset (purchase amounts & running avg cost)",
+          "description": "Get DCA (Dollar Cost Averaging) chart data for an asset, showing purchase amounts and running average cost",
           "auth": true,
           "query": {
             "code": "string (required, asset code)"
           },
+          "requestExample": "/api/reports/dca-chart?code=SJC",
           "response": {
-            "assetCode": "string",
-            "numPurchases": "number",
-            "avgIntervalDays": "number",
-            "avgPerPurchase": "number (VND)",
-            "purchaseAmounts": "number[]",
-            "avgCostPrices": "number[]",
-            "currentPrice": "number"
+            "data": {
+              "assetCode": "string",
+              "numPurchases": "number (total buy orders)",
+              "avgIntervalDays": "number (average days between purchases)",
+              "avgPerPurchase": "number (VND, average amount per purchase)",
+              "purchaseAmounts": "number[] (VND amount of each purchase)",
+              "avgCostPrices": "number[] (running average cost after each purchase)",
+              "currentPrice": "number (VND, current market price)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "assetCode": "SJC",
+              "numPurchases": 3,
+              "avgIntervalDays": 45,
+              "avgPerPurchase": 85000000,
+              "purchaseAmounts": [82500000, 85000000, 92500000],
+              "avgCostPrices": [82500000, 83750000, 86666667],
+              "currentPrice": 92500000
+            }
           }
         },
         {
           "method": "GET",
           "path": "/api/reports/dca-history",
-          "description": "Get DCA purchase history for an asset",
+          "description": "Get detailed DCA purchase history for an asset (buy orders only, numbered sequentially)",
           "auth": true,
           "query": {
             "code": "string (required, asset code)"
           },
-          "response": [
-            {
-              "number": "number (sequence)",
-              "date": "string (ISO 8601)",
-              "unitPrice": "number",
-              "quantity": "number",
-              "total": "number (VND)"
-            }
-          ]
+          "requestExample": "/api/reports/dca-history?code=SJC",
+          "response": {
+            "data": [
+              {
+                "number": "number (1-based sequence)",
+                "date": "string (YYYY-MM-DD)",
+                "unitPrice": "number (VND per unit)",
+                "quantity": "number",
+                "total": "number (VND, quantity × unitPrice)"
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              { "number": 1, "date": "2025-01-15", "unitPrice": 82500000, "quantity": 1, "total": 82500000 },
+              { "number": 2, "date": "2025-02-10", "unitPrice": 85000000, "quantity": 1, "total": 85000000 },
+              { "number": 3, "date": "2025-04-20", "unitPrice": 92500000, "quantity": 1, "total": 92500000 }
+            ]
+          }
         },
         {
           "method": "GET",
           "path": "/api/reports/dca-comparison",
-          "description": "Compare DCA vs lump sum investment strategy for an asset",
+          "description": "Compare DCA strategy vs lump sum investment for an asset. Lump sum assumes buying all at the first purchase price.",
           "auth": true,
           "query": {
             "code": "string (required, asset code)"
           },
+          "requestExample": "/api/reports/dca-comparison?code=SJC",
           "response": {
-            "dca": {
-              "avgCost": "number",
-              "totalCapital": "number (VND)",
-              "currentValue": "number (VND)",
-              "profit": "number (VND)",
-              "profitPercent": "number (%)"
-            },
-            "lumpSum": {
-              "priceAtFirstBuy": "number",
-              "totalCapital": "number (VND)",
-              "currentValue": "number (VND)",
-              "profit": "number (VND)",
-              "profitPercent": "number (%)"
+            "data": {
+              "dca": {
+                "avgCost": "number (VND, weighted average cost)",
+                "totalCapital": "number (VND, total invested)",
+                "currentValue": "number (VND)",
+                "profit": "number (VND)",
+                "profitPercent": "number (%)"
+              },
+              "lumpSum": {
+                "priceAtFirstBuy": "number (VND, price at first buy)",
+                "totalCapital": "number (VND, same total as DCA)",
+                "currentValue": "number (VND)",
+                "profit": "number (VND)",
+                "profitPercent": "number (%)"
+              }
+            }
+          },
+          "responseExample": {
+            "data": {
+              "dca": {
+                "avgCost": 86666667,
+                "totalCapital": 260000000,
+                "currentValue": 277500000,
+                "profit": 17500000,
+                "profitPercent": 6.73
+              },
+              "lumpSum": {
+                "priceAtFirstBuy": 82500000,
+                "totalCapital": 260000000,
+                "currentValue": 291515152,
+                "profit": 31515152,
+                "profitPercent": 12.12
+              }
             }
           }
         }
       ]
     }
-  ]
+  ],
+  "errorCodes": {
+    "400": {
+      "en": "Bad Request",
+      "vi": "Yêu cầu không hợp lệ",
+      "description": "Validation failed or business rule violated"
+    },
+    "401": {
+      "en": "Unauthorized",
+      "vi": "Chưa xác thực",
+      "description": "Missing/invalid/expired token or wrong credentials"
+    },
+    "403": {
+      "en": "Forbidden",
+      "vi": "Không có quyền truy cập",
+      "description": "Authenticated but not authorized"
+    },
+    "404": {
+      "en": "Not Found",
+      "vi": "Không tìm thấy",
+      "description": "Resource not found"
+    },
+    "409": {
+      "en": "Conflict",
+      "vi": "Xung đột dữ liệu",
+      "description": "Resource conflict"
+    },
+    "500": {
+      "en": "Internal Server Error",
+      "vi": "Lỗi máy chủ nội bộ",
+      "description": "Unexpected server error"
+    }
+  }
 }

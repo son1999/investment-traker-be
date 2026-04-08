@@ -1,10 +1,109 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { I18nService } from '../i18n/i18n.service.js';
+import { CreateAssetDto } from './dto/create-asset.dto.js';
+import { UpdateAssetDto } from './dto/update-asset.dto.js';
 import { getPeriodStartDate, toDateStr } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class AssetsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private i18n: I18nService,
+  ) {}
+
+  // ─── CRUD ──────────────────────────────────────────────
+
+  async findAll(userId: string, type?: string) {
+    const where: any = { userId };
+    if (type) where.type = type;
+
+    return this.prisma.asset.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(userId: string, code: string) {
+    const asset = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code } },
+    });
+    if (!asset) {
+      throw new NotFoundException(this.i18n.t('ASSET_NOT_FOUND', { code }));
+    }
+    return asset;
+  }
+
+  async create(userId: string, dto: CreateAssetDto) {
+    const existing = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code: dto.code } },
+    });
+    if (existing) {
+      throw new ConflictException(this.i18n.t('ASSET_ALREADY_EXISTS', { code: dto.code }));
+    }
+
+    const currency = dto.currency || 'VND';
+    if (currency !== 'VND') {
+      const currencyExists = await this.prisma.currency.findUnique({
+        where: { userId_code: { userId, code: currency } },
+      });
+      if (!currencyExists) {
+        throw new BadRequestException(this.i18n.t('CURRENCY_NOT_FOUND', { code: currency }));
+      }
+    }
+
+    return this.prisma.asset.create({
+      data: {
+        userId,
+        code: dto.code,
+        name: dto.name,
+        type: dto.type,
+        currency,
+        icon: dto.icon,
+        iconBg: dto.iconBg,
+      },
+    });
+  }
+
+  async update(userId: string, code: string, dto: UpdateAssetDto) {
+    const existing = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code } },
+    });
+    if (!existing) {
+      throw new NotFoundException(this.i18n.t('ASSET_NOT_FOUND', { code }));
+    }
+
+    return this.prisma.asset.update({
+      where: { id: existing.id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.icon !== undefined && { icon: dto.icon }),
+        ...(dto.iconBg !== undefined && { iconBg: dto.iconBg }),
+      },
+    });
+  }
+
+  async delete(userId: string, code: string) {
+    const existing = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code } },
+    });
+    if (!existing) {
+      throw new NotFoundException(this.i18n.t('ASSET_NOT_FOUND', { code }));
+    }
+
+    const txCount = await this.prisma.transaction.count({
+      where: { userId, assetCode: code },
+    });
+    if (txCount > 0) {
+      throw new BadRequestException(this.i18n.t('ASSET_HAS_TRANSACTIONS', { code, count: txCount }));
+    }
+
+    await this.prisma.asset.delete({ where: { id: existing.id } });
+    return { success: true };
+  }
+
+  // ─── DETAIL & TRANSACTIONS (existing) ─────────────────
 
   async getAssetDetail(userId: string, code: string) {
     const transactions = await this.prisma.transaction.findMany({
@@ -13,17 +112,21 @@ export class AssetsService {
     });
 
     if (transactions.length === 0) {
-      throw new NotFoundException(`Asset ${code} not found`);
+      throw new NotFoundException(this.i18n.t('ASSET_NOT_FOUND', { code }));
     }
 
     const priceData = await this.prisma.price.findUnique({
       where: { userId_code: { userId, code } },
     });
 
+    const asset = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code } },
+    });
+
     const currentPrice = priceData ? priceData.price : 0;
-    const assetType = transactions[0].assetType;
-    const icon = priceData?.icon || transactions[0].icon;
-    const iconBg = transactions[0].iconBg;
+    const assetType = asset?.type || transactions[0].assetType;
+    const icon = asset?.icon || priceData?.icon || transactions[0].icon;
+    const iconBg = asset?.iconBg || transactions[0].iconBg;
 
     const buyLots: { qty: number; price: number }[] = [];
     let totalBuyQty = 0;
@@ -99,7 +202,7 @@ export class AssetsService {
         holdings: {
           quantity: netQty,
           unit: code,
-          detail: `${buyCount} lệnh mua · ${sellCount} lệnh bán`,
+          detail: this.i18n.t('HOLDINGS_DETAIL', { buyCount, sellCount }),
         },
         avgCost: {
           value: avgCost,

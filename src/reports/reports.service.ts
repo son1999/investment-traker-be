@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CurrenciesService } from '../currencies/currencies.service.js';
 import { getPeriodStartDate, toDateStr, getMonthKey } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private currenciesService: CurrenciesService,
+  ) {}
 
   private async getFilteredTransactions(userId: string, period: string) {
     const startDate = getPeriodStartDate(period);
@@ -18,10 +22,31 @@ export class ReportsService {
     });
   }
 
+  private async getAssetCurrencyMap(userId: string): Promise<Map<string, string>> {
+    const assets = await this.prisma.asset.findMany({
+      where: { userId },
+      select: { code: true, currency: true },
+    });
+    const map = new Map<string, string>();
+    assets.forEach((a) => map.set(a.code, a.currency));
+    return map;
+  }
+
+  private getRate(
+    code: string,
+    assetCurrencyMap: Map<string, string>,
+    rateMap: Map<string, number>,
+  ): number {
+    const currency = assetCurrencyMap.get(code) || 'VND';
+    return rateMap.get(currency) || 1;
+  }
+
   async getPerformance(userId: string, period: string = 'all') {
-    const [transactions, prices] = await Promise.all([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.getFilteredTransactions(userId, period),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -71,7 +96,8 @@ export class ReportsService {
       cumulativeHoldings.forEach((h, code) => {
         if (h.qty > 0) {
           const price = priceMap.get(code) || 0;
-          typeValues[h.type] = (typeValues[h.type] || 0) + h.qty * price;
+          const rate = this.getRate(code, assetCurrencyMap, rateMap);
+          typeValues[h.type] = (typeValues[h.type] || 0) + h.qty * price * rate;
         }
       });
 
@@ -86,9 +112,11 @@ export class ReportsService {
   }
 
   async getSummary(userId: string, period: string = 'all') {
-    const [transactions, prices] = await Promise.all([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.getFilteredTransactions(userId, period),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -104,19 +132,20 @@ export class ReportsService {
       const code = t.assetCode;
       const qty = t.quantity;
       const price = t.unitPrice;
+      const rate = this.getRate(code, assetCurrencyMap, rateMap);
 
       if (t.action === 'MUA') {
-        totalDeposited += qty * price;
+        totalDeposited += qty * price * rate;
         if (!buyLots.has(code)) buyLots.set(code, []);
         buyLots.get(code)!.push({ qty, price });
       } else {
-        totalWithdrawn += qty * price;
+        totalWithdrawn += qty * price * rate;
         let remaining = qty;
         const lots = buyLots.get(code) || [];
         while (remaining > 0 && lots.length > 0) {
           const lot = lots[0];
           const used = Math.min(remaining, lot.qty);
-          realizedPnl += (price - lot.price) * used;
+          realizedPnl += (price - lot.price) * used * rate;
           lot.qty -= used;
           remaining -= used;
           if (lot.qty <= 0) lots.shift();
@@ -127,9 +156,10 @@ export class ReportsService {
     let unrealizedPnl = 0;
     buyLots.forEach((lots, code) => {
       const currentPrice = priceMap.get(code) || 0;
+      const rate = this.getRate(code, assetCurrencyMap, rateMap);
       lots.forEach((lot) => {
         if (lot.qty > 0) {
-          unrealizedPnl += (currentPrice - lot.price) * lot.qty;
+          unrealizedPnl += (currentPrice - lot.price) * lot.qty * rate;
         }
       });
     });
@@ -143,7 +173,11 @@ export class ReportsService {
   }
 
   async getCashFlow(userId: string, period: string = 'all') {
-    const transactions = await this.getFilteredTransactions(userId, period);
+    const [transactions, assetCurrencyMap, rateMap] = await Promise.all([
+      this.getFilteredTransactions(userId, period),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
+    ]);
 
     const monthlyFlow = new Map<string, { inflow: number; outflow: number }>();
 
@@ -153,7 +187,8 @@ export class ReportsService {
         monthlyFlow.set(month, { inflow: 0, outflow: 0 });
       }
       const flow = monthlyFlow.get(month)!;
-      const total = t.quantity * t.unitPrice;
+      const rate = this.getRate(t.assetCode, assetCurrencyMap, rateMap);
+      const total = t.quantity * t.unitPrice * rate;
       if (t.action === 'MUA') {
         flow.inflow += total;
       } else {
@@ -171,9 +206,11 @@ export class ReportsService {
   }
 
   async getTopAssets(userId: string, period: string = 'all', limit: number = 5) {
-    const [transactions, prices] = await Promise.all([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.getFilteredTransactions(userId, period),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, { price: number; icon: string }>();
@@ -210,9 +247,10 @@ export class ReportsService {
       if (a.netQty <= 0) return;
       const priceInfo = priceMap.get(code);
       const currentPrice = priceInfo?.price || 0;
-      const currentValue = a.netQty * currentPrice;
+      const rate = this.getRate(code, assetCurrencyMap, rateMap);
+      const currentValue = a.netQty * currentPrice * rate;
       const avgCost = a.totalBuyQty > 0 ? a.totalBuyCost / a.totalBuyQty : 0;
-      const invested = a.netQty * avgCost;
+      const invested = a.netQty * avgCost * rate;
       const pnlAmount = currentValue - invested;
       const pnlPercent = invested > 0 ? Math.round(((currentValue - invested) / invested) * 10000) / 100 : 0;
 
@@ -248,9 +286,11 @@ export class ReportsService {
   }
 
   async getPerformanceComparison(userId: string) {
-    const [transactions, prices] = await this.prisma.$transaction([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -278,8 +318,9 @@ export class ReportsService {
       if (a.netQty <= 0) return;
       const currentPrice = priceMap.get(code) || 0;
       const avgCost = a.totalBuyQty > 0 ? a.totalBuyCost / a.totalBuyQty : 0;
-      const invested = a.netQty * avgCost;
-      const currentValue = a.netQty * currentPrice;
+      const rate = this.getRate(code, assetCurrencyMap, rateMap);
+      const invested = a.netQty * avgCost * rate;
+      const currentValue = a.netQty * currentPrice * rate;
       const profitPercent = invested > 0 ? Math.round(((currentValue - invested) / invested) * 10000) / 100 : 0;
 
       result.push({

@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { I18nService } from '../i18n/i18n.service.js';
 import { CreatePriceDto } from './dto/create-price.dto.js';
 import { UpdatePriceDto } from './dto/update-price.dto.js';
 
 @Injectable()
 export class PricesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private i18n: I18nService,
+  ) {}
 
   async findAll(userId: string, type?: string) {
     const where: any = { userId };
@@ -49,7 +53,7 @@ export class PricesService {
     });
 
     if (!existing) {
-      throw new NotFoundException(`Price for ${code} not found`);
+      throw new NotFoundException(this.i18n.t('PRICE_NOT_FOUND', { code }));
     }
 
     return this.prisma.price.update({

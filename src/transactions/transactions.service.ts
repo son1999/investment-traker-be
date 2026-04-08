@@ -1,12 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { I18nService } from '../i18n/i18n.service.js';
 import { CreateTransactionDto } from './dto/create-transaction.dto.js';
 import { QueryTransactionDto } from './dto/query-transaction.dto.js';
 import { toDateStr } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class TransactionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private i18n: I18nService,
+  ) {}
 
   async findAll(userId: string, query: QueryTransactionDto) {
     const { filter, search, page = 1, limit = 20 } = query;
@@ -46,6 +50,15 @@ export class TransactionsService {
   }
 
   async create(userId: string, dto: CreateTransactionDto) {
+    const asset = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code: dto.assetCode } },
+    });
+    if (!asset) {
+      throw new BadRequestException(
+        this.i18n.t('ASSET_NOT_REGISTERED', { code: dto.assetCode }),
+      );
+    }
+
     if (dto.action === 'BAN') {
       const holdings = await this.prisma.transaction.findMany({
         where: { userId, assetCode: dto.assetCode },
@@ -60,7 +73,10 @@ export class TransactionsService {
 
       if (dto.quantity > totalHolding) {
         throw new BadRequestException(
-          `Insufficient holdings. Available: ${totalHolding}, requested: ${dto.quantity}`,
+          this.i18n.t('INSUFFICIENT_HOLDINGS', {
+            available: totalHolding,
+            requested: dto.quantity,
+          }),
         );
       }
     }
@@ -89,7 +105,7 @@ export class TransactionsService {
     });
 
     if (!record) {
-      throw new NotFoundException('Transaction not found');
+      throw new NotFoundException(this.i18n.t('TRANSACTION_NOT_FOUND'));
     }
 
     await this.prisma.transaction.delete({ where: { id } });

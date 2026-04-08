@@ -1,20 +1,31 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { I18nService } from '../i18n/i18n.service.js';
+import { CurrenciesService } from '../currencies/currencies.service.js';
 import { SetTargetsDto } from './dto/set-targets.dto.js';
 
 @Injectable()
 export class AllocationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private i18n: I18nService,
+    private currenciesService: CurrenciesService,
+  ) {}
 
   async getCurrent(userId: string) {
-    const [transactions, prices, targets] = await this.prisma.$transaction([
+    const [transactions, prices, targets, assets, rateMap] = await Promise.all([
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
       this.prisma.allocationTarget.findMany({ where: { userId } }),
+      this.prisma.asset.findMany({ where: { userId }, select: { code: true, currency: true } }),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, number>();
     prices.forEach((p) => priceMap.set(p.code, p.price));
+
+    const assetCurrencyMap = new Map<string, string>();
+    assets.forEach((a) => assetCurrencyMap.set(a.code, a.currency));
 
     const targetMap = new Map<string, number>();
     targets.forEach((t) => targetMap.set(t.assetType, t.targetPercent));
@@ -36,7 +47,9 @@ export class AllocationService {
     assetHoldings.forEach((h, code) => {
       if (h.qty <= 0) return;
       const price = priceMap.get(code) || 0;
-      const value = h.qty * price;
+      const currency = assetCurrencyMap.get(code) || 'VND';
+      const rate = rateMap.get(currency) || 1;
+      const value = h.qty * price * rate;
       typeValues.set(h.type, (typeValues.get(h.type) || 0) + value);
       totalValue += value;
     });
@@ -74,7 +87,7 @@ export class AllocationService {
     const total = dto.targets.reduce((sum, t) => sum + t.targetPercent, 0);
     if (Math.abs(total - 100) > 0.01) {
       throw new BadRequestException(
-        `Target percentages must sum to 100. Current total: ${total}`,
+        this.i18n.t('TARGET_SUM_INVALID', { total }),
       );
     }
 
@@ -112,14 +125,20 @@ export class AllocationService {
             assetType: c.assetType,
             action: 'sell',
             amount: Math.round(Math.abs(diff)),
-            description: `Sell ~${Math.round(Math.abs(diff) / 1000000)}M VND of ${c.name}`,
+            description: this.i18n.t('SELL_RECOMMENDATION', {
+              amount: Math.round(Math.abs(diff) / 1000000),
+              name: c.name,
+            }),
           });
         } else {
           actions.push({
             assetType: c.assetType,
             action: 'buy',
             amount: Math.round(Math.abs(diff)),
-            description: `Buy ~${Math.round(Math.abs(diff) / 1000000)}M VND of ${c.name}`,
+            description: this.i18n.t('BUY_RECOMMENDATION', {
+              amount: Math.round(Math.abs(diff) / 1000000),
+              name: c.name,
+            }),
           });
         }
       }
@@ -128,8 +147,8 @@ export class AllocationService {
     return {
       actions,
       summary: actions.length > 0
-        ? 'Portfolio has deviated from strategic targets. Rebalancing recommended.'
-        : 'Portfolio is well-balanced. No rebalancing needed.',
+        ? this.i18n.t('REBALANCE_RECOMMENDED')
+        : this.i18n.t('PORTFOLIO_BALANCED'),
     };
   }
 }

@@ -1,10 +1,14 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service.js';
+import { I18nService } from '../i18n/i18n.service.js';
 import { LoginDto } from './dto/login.dto.js';
 
 @Injectable()
 export class AuthService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(
+    private supabaseService: SupabaseService,
+    private i18n: I18nService,
+  ) {}
 
   async login(dto: LoginDto) {
     const { data, error } = await this.supabaseService
@@ -15,7 +19,7 @@ export class AuthService {
       });
 
     if (error) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(this.i18n.t('INVALID_CREDENTIALS'));
     }
 
     return {

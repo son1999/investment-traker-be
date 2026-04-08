@@ -1,15 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CurrenciesService } from '../currencies/currencies.service.js';
 import { getPeriodStartDate, toDateStr, getMonthKey } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class PortfolioService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private currenciesService: CurrenciesService,
+  ) {}
+
+  private async getAssetCurrencyMap(userId: string): Promise<Map<string, string>> {
+    const assets = await this.prisma.asset.findMany({
+      where: { userId },
+      select: { code: true, currency: true },
+    });
+    const map = new Map<string, string>();
+    assets.forEach((a) => map.set(a.code, a.currency));
+    return map;
+  }
+
+  private getRate(
+    code: string,
+    assetCurrencyMap: Map<string, string>,
+    rateMap: Map<string, number>,
+  ): number {
+    const currency = assetCurrencyMap.get(code) || 'VND';
+    return rateMap.get(currency) || 1;
+  }
 
   async getSummary(userId: string) {
-    const [transactions, prices] = await this.prisma.$transaction([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -39,7 +64,8 @@ export class PortfolioService {
     holdings.forEach((h, code) => {
       if (h.quantity > 0) {
         const currentPrice = priceMap.get(code) || 0;
-        totalValue += h.quantity * currentPrice;
+        const rate = this.getRate(code, assetCurrencyMap, rateMap);
+        totalValue += h.quantity * currentPrice * rate;
         assetCodes.push(code);
       }
     });
@@ -56,7 +82,8 @@ export class PortfolioService {
           0,
         );
         const avgCost = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0;
-        capitalInvested += h.quantity * avgCost;
+        const rate = this.getRate(code, assetCurrencyMap, rateMap);
+        capitalInvested += h.quantity * avgCost * rate;
       }
     });
 
@@ -76,9 +103,11 @@ export class PortfolioService {
   }
 
   async getHoldings(userId: string) {
-    const [transactions, prices] = await this.prisma.$transaction([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, { price: number; icon: string }>();
@@ -126,8 +155,10 @@ export class PortfolioService {
       const avgCost = a.totalBuyQty > 0 ? a.totalBuyCost / a.totalBuyQty : 0;
       const priceInfo = priceMap.get(code);
       const currentPrice = priceInfo?.price || 0;
-      const value = a.netQty * currentPrice;
-      const profitLossAmount = (currentPrice - avgCost) * a.netQty;
+      const rate = this.getRate(code, assetCurrencyMap, rateMap);
+      const currency = assetCurrencyMap.get(code) || 'VND';
+      const valueVnd = a.netQty * currentPrice * rate;
+      const profitLossAmount = (currentPrice - avgCost) * a.netQty * rate;
       const profitLossPercent =
         avgCost > 0 ? Math.round(((currentPrice - avgCost) / avgCost) * 10000) / 100 : 0;
 
@@ -140,7 +171,8 @@ export class PortfolioService {
         quantity: a.netQty,
         averageCost: Math.round(avgCost),
         currentPrice: Math.round(currentPrice),
-        value: Math.round(value),
+        currency,
+        value: Math.round(valueVnd),
         profitLossPercent,
         profitLossAmount: Math.round(profitLossAmount),
         positive: profitLossAmount >= 0,
@@ -198,12 +230,14 @@ export class PortfolioService {
     const where: any = { userId };
     if (startDate) where.date = { gte: startDate };
 
-    const [transactions, prices] = await this.prisma.$transaction([
+    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
         orderBy: { date: 'asc' },
       }),
       this.prisma.price.findMany({ where: { userId } }),
+      this.getAssetCurrencyMap(userId),
+      this.currenciesService.getRateMap(userId),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -246,7 +280,8 @@ export class PortfolioService {
       runningHoldings.forEach((h, code) => {
         if (h.qty > 0) {
           const price = priceMap.get(code) || 0;
-          totalValue += h.qty * price;
+          const rate = this.getRate(code, assetCurrencyMap, rateMap);
+          totalValue += h.qty * price * rate;
         }
       });
 
