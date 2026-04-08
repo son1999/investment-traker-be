@@ -14,6 +14,8 @@ async function bootstrap() {
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
+      'https://investment-traker.vercel.app',
+      'https://investment.keymart.vn',
       process.env.FRONTEND_URL,
     ].filter(Boolean) as string[],
     credentials: true,
