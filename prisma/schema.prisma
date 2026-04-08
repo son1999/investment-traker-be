@@ -45,6 +45,7 @@ model Transaction {
   action    String
   quantity  Float
   unitPrice Float    @map("unit_price")
+  currency  String   @default("VND")
   note      String?
   icon      String
   iconBg    String   @map("icon_bg")

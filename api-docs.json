@@ -287,6 +287,7 @@
                 "action": "MUA|BAN",
                 "quantity": "number",
                 "unitPrice": "number",
+                "currency": "string (currency code, e.g. VND, USDT)",
                 "note": "string|null",
                 "icon": "string (emoji)",
                 "iconBg": "string (CSS color)"
@@ -309,6 +310,7 @@
                 "action": "MUA",
                 "quantity": 2,
                 "unitPrice": 82500000,
+                "currency": "VND",
                 "note": "Mua vàng đầu năm",
                 "icon": "🥇",
                 "iconBg": "rgba(248,160,16,0.2)"
@@ -341,6 +343,7 @@
                 "action": "MUA|BAN",
                 "quantity": "number",
                 "unitPrice": "number",
+                "currency": "string (currency code, e.g. VND, USDT)",
                 "note": "string|null",
                 "icon": "string (emoji)",
                 "iconBg": "string (CSS color)"
@@ -384,6 +387,7 @@
               "action": "MUA|BAN",
               "quantity": "number",
               "unitPrice": "number",
+              "currency": "string (auto-populated from asset)",
               "note": "string|null",
               "icon": "string",
               "iconBg": "string"

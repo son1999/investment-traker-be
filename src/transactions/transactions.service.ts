@@ -90,6 +90,7 @@ export class TransactionsService {
         action: dto.action,
         quantity: dto.quantity,
         unitPrice: dto.unitPrice,
+        currency: asset.currency,
         note: dto.note || null,
         icon: dto.icon,
         iconBg: dto.iconBg,
