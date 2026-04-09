@@ -48,21 +48,36 @@ export class CoinGeckoProvider {
 
     const url = `${this.baseUrl}/simple/price?ids=${coinIds.join(',')}&vs_currencies=${currencies.join(',')}`;
 
-    try {
-      const headers: Record<string, string> = {};
-      if (this.apiKey) {
-        headers['x-cg-demo-api-key'] = this.apiKey;
-      }
-      const response = await fetch(url, { headers });
-      if (!response.ok) {
-        this.logger.warn(`CoinGecko API error: ${response.status}`);
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const headers: Record<string, string> = {};
+        if (this.apiKey) {
+          headers['x-cg-demo-api-key'] = this.apiKey;
+        }
+        const response = await fetch(url, { headers });
+
+        if (response.status === 429) {
+          const waitSec = attempt + 1;
+          this.logger.warn(`CoinGecko rate-limited (429), retry ${attempt + 1}/${maxRetries} after ${waitSec}s`);
+          if (attempt < maxRetries) {
+            await new Promise((r) => setTimeout(r, waitSec * 1000));
+            continue;
+          }
+          return {};
+        }
+
+        if (!response.ok) {
+          this.logger.warn(`CoinGecko API error: ${response.status}`);
+          return {};
+        }
+        return await response.json();
+      } catch (error) {
+        this.logger.error('Failed to fetch from CoinGecko', error);
         return {};
       }
-      return await response.json();
-    } catch (error) {
-      this.logger.error('Failed to fetch from CoinGecko', error);
-      return {};
     }
+    return {};
   }
 
   async fetchPrice(
