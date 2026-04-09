@@ -17,7 +17,7 @@
     "Content-Type": "application/json"
   },
   "commonTypes": {
-    "AssetType": ["metal", "crypto", "stock"],
+    "AssetType": ["metal", "crypto", "stock", "savings"],
     "TransactionAction": ["MUA", "BAN"],
     "Period": ["1m", "3m", "6m", "1y", "all"],
     "AllocationStatus": ["on-target", "overweight", "underweight"],
@@ -271,7 +271,7 @@
           "description": "List transactions with filters, search and pagination",
           "auth": true,
           "query": {
-            "filter": "string? (metal|crypto|stock) - filter by asset type",
+            "filter": "string? (metal|crypto|stock|savings) - filter by asset type",
             "search": "string? - search by asset code (case insensitive)",
             "page": "number? (default 1, min 1)",
             "limit": "number? (default 20, positive integer)"
@@ -282,7 +282,7 @@
               {
                 "id": "string (UUID)",
                 "date": "string (YYYY-MM-DD)",
-                "assetType": "metal|crypto|stock",
+                "assetType": "metal|crypto|stock|savings",
                 "assetCode": "string",
                 "action": "MUA|BAN",
                 "quantity": "number",
@@ -338,7 +338,7 @@
               {
                 "id": "string (UUID)",
                 "date": "string (YYYY-MM-DD)",
-                "assetType": "metal|crypto|stock",
+                "assetType": "metal|crypto|stock|savings",
                 "assetCode": "string",
                 "action": "MUA|BAN",
                 "quantity": "number",
@@ -358,7 +358,7 @@
           "auth": true,
           "requestBody": {
             "date": "string (ISO 8601, required)",
-            "assetType": "metal|crypto|stock (required, enum)",
+            "assetType": "metal|crypto|stock|savings (required, enum)",
             "assetCode": "string (required)",
             "action": "MUA|BAN (required, enum)",
             "quantity": "number (positive, required)",
@@ -382,7 +382,7 @@
             "data": {
               "id": "string (UUID)",
               "date": "string (YYYY-MM-DD)",
-              "assetType": "metal|crypto|stock",
+              "assetType": "metal|crypto|stock|savings",
               "assetCode": "string",
               "action": "MUA|BAN",
               "quantity": "number",
@@ -453,6 +453,42 @@
               "deleted": 2
             }
           }
+        },
+        {
+          "method": "POST",
+          "path": "/api/transactions/import-csv",
+          "description": "Import transactions from CSV file. Validates each row: asset must exist, sell quantity checked against holdings. Returns success/error counts.",
+          "auth": true,
+          "requestBody": "multipart/form-data with field 'file' (CSV file)",
+          "csvFormat": {
+            "description": "CSV must have a header row. Required columns: date, assetType, assetCode, action, quantity, unitPrice. Optional: note, icon, iconBg. Column aliases supported: type→assetType, code→assetCode, price→unitPrice",
+            "example": "date,assetType,assetCode,action,quantity,unitPrice,note\n2025-01-15,crypto,BTC,MUA,0.5,1500000000,Monthly DCA\n2025-02-15,crypto,BTC,MUA,0.3,1600000000,"
+          },
+          "response": {
+            "data": {
+              "successCount": "number (rows imported)",
+              "errorCount": "number (rows with errors)",
+              "errors": [
+                {
+                  "row": "number (1-based row number)",
+                  "message": "string (error description)"
+                }
+              ]
+            }
+          },
+          "responseExample": {
+            "data": {
+              "successCount": 8,
+              "errorCount": 2,
+              "errors": [
+                { "row": 5, "message": "Asset XYZ not registered" },
+                { "row": 9, "message": "Insufficient holdings for BTC. Available: 0.5, requested: 1" }
+              ]
+            }
+          },
+          "errors": {
+            "400": "No file uploaded"
+          }
         }
       ]
     },
@@ -466,7 +502,7 @@
           "description": "Get all prices, optionally filtered by asset type",
           "auth": true,
           "query": {
-            "type": "string? (metal|crypto|stock)"
+            "type": "string? (metal|crypto|stock|savings)"
           },
           "requestExample": "/api/prices?type=metal",
           "response": {
@@ -475,7 +511,7 @@
                 "id": "string (UUID)",
                 "code": "string",
                 "icon": "string (emoji)",
-                "type": "metal|crypto|stock",
+                "type": "metal|crypto|stock|savings",
                 "price": "number",
                 "updatedAt": "string (ISO 8601)"
               }
@@ -502,7 +538,7 @@
           "requestBody": {
             "code": "string (required)",
             "icon": "string (required, emoji)",
-            "type": "metal|crypto|stock (required, enum)",
+            "type": "metal|crypto|stock|savings (required, enum)",
             "price": "number (min 0, required)"
           },
           "requestExample": {
@@ -516,7 +552,7 @@
               "id": "string (UUID)",
               "code": "string",
               "icon": "string",
-              "type": "metal|crypto|stock",
+              "type": "metal|crypto|stock|savings",
               "price": "number",
               "updatedAt": "string (ISO 8601)"
             }
@@ -541,7 +577,7 @@
               "id": "string (UUID)",
               "code": "string",
               "icon": "string",
-              "type": "metal|crypto|stock",
+              "type": "metal|crypto|stock|savings",
               "price": "number",
               "updatedAt": "string (ISO 8601)"
             }
@@ -550,6 +586,66 @@
             "404": {
               "en": "Price for {code} not found",
               "vi": "Không tìm thấy giá cho {code}"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/prices/refresh",
+          "description": "Refresh all asset prices from external APIs. Crypto via CoinGecko (BTC, ETH, etc), stocks via VnStock (during trading hours 9h-15h Vietnam time only). Metal/savings are not auto-fetched. Prices are cached for 5 minutes.",
+          "auth": true,
+          "requestBody": null,
+          "response": {
+            "data": {
+              "updated": [
+                {
+                  "code": "string (asset code)",
+                  "type": "string (asset type)",
+                  "price": "number (new price)"
+                }
+              ],
+              "count": "number (total updated)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "updated": [
+                { "code": "BTC", "type": "crypto", "price": 2750000000 },
+                { "code": "ETH", "type": "crypto", "price": 85000000 },
+                { "code": "VNM", "type": "stock", "price": 78500 }
+              ],
+              "count": 3
+            }
+          },
+          "notes": {
+            "cachingStrategy": "Crypto: cached 5 min (CoinGecko free = 10k calls/month). Stocks: cached 5 min during trading hours (9h-15h ICT Mon-Fri), no API call outside hours.",
+            "supportedCrypto": "BTC, ETH, USDT, BNB, SOL, XRP, ADA, DOGE, DOT, MATIC, LINK, UNI, AVAX, ATOM, NEAR, APT, SUI"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/prices/:code/live",
+          "description": "Get live price for a specific asset with caching. Only works for crypto and stock types.",
+          "auth": true,
+          "params": {
+            "code": "string (asset code, e.g. 'BTC', 'VNM')"
+          },
+          "query": {
+            "type": "string (required, crypto|stock)"
+          },
+          "requestExample": "/api/prices/BTC/live?type=crypto",
+          "response": {
+            "data": {
+              "code": "string",
+              "type": "string",
+              "price": "number|null (null if not available)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "code": "BTC",
+              "type": "crypto",
+              "price": 2750000000
             }
           }
         }
@@ -596,7 +692,7 @@
             "data": [
               {
                 "assetCode": "string",
-                "assetType": "metal|crypto|stock",
+                "assetType": "metal|crypto|stock|savings",
                 "name": "string",
                 "icon": "string (emoji)",
                 "iconBg": "string (CSS color)",
@@ -638,8 +734,8 @@
           "response": {
             "data": [
               {
-                "assetType": "metal|crypto|stock",
-                "label": "string (display name: Metal, Crypto, Stock)",
+                "assetType": "metal|crypto|stock|savings",
+                "label": "string (display name: Metal, Crypto, Stock, Savings)",
                 "value": "number (% allocation)",
                 "amount": "number (VND)"
               }
@@ -647,9 +743,10 @@
           },
           "responseExample": {
             "data": [
-              { "assetType": "metal", "label": "Metal", "value": 40, "amount": 200000000 },
-              { "assetType": "crypto", "label": "Crypto", "value": 35, "amount": 175000000 },
-              { "assetType": "stock", "label": "Stock", "value": 25, "amount": 125000000 }
+              { "assetType": "metal", "label": "Metal", "value": 35, "amount": 175000000 },
+              { "assetType": "crypto", "label": "Crypto", "value": 30, "amount": 150000000 },
+              { "assetType": "stock", "label": "Stock", "value": 20, "amount": 100000000 },
+              { "assetType": "savings", "label": "Savings", "value": 15, "amount": 75000000 }
             ]
           }
         },
@@ -718,7 +815,7 @@
           "description": "List all registered investment assets, optionally filtered by type",
           "auth": true,
           "query": {
-            "type": "string? (metal|crypto|stock)"
+            "type": "string? (metal|crypto|stock|savings)"
           },
           "requestExample": "/api/assets?type=metal",
           "response": {
@@ -727,7 +824,7 @@
                 "id": "string (UUID)",
                 "code": "string",
                 "name": "string",
-                "type": "metal|crypto|stock",
+                "type": "metal|crypto|stock|savings",
                 "currency": "string (currency code, default VND)",
                 "icon": "string (emoji)",
                 "iconBg": "string (CSS color)",
@@ -760,10 +857,14 @@
           "requestBody": {
             "code": "string (required, unique per user, e.g. 'SJC', 'BTC', 'VNM')",
             "name": "string (required, display name, e.g. 'Vàng SJC')",
-            "type": "metal|crypto|stock (required, enum)",
+            "type": "metal|crypto|stock|savings (required, enum)",
             "currency": "string? (optional, default 'VND', must be a registered currency code)",
             "icon": "string (required, emoji, e.g. '🥇')",
-            "iconBg": "string (required, CSS color, e.g. 'rgba(248,160,16,0.2)')"
+            "iconBg": "string (required, CSS color, e.g. 'rgba(248,160,16,0.2)')",
+            "interestRate": "number? (required for savings, annual rate %, e.g. 5.5)",
+            "termMonths": "number? (required for savings, term in months, e.g. 12)",
+            "bankName": "string? (optional, for savings, e.g. 'Vietcombank')",
+            "maturityDate": "string? (optional, for savings, ISO date e.g. '2026-01-15')"
           },
           "requestExample": {
             "code": "SJC",
@@ -778,7 +879,7 @@
               "id": "string (UUID)",
               "code": "string",
               "name": "string",
-              "type": "metal|crypto|stock",
+              "type": "metal|crypto|stock|savings",
               "icon": "string",
               "iconBg": "string",
               "createdAt": "string (ISO 8601)",
@@ -802,9 +903,13 @@
           },
           "requestBody": {
             "name": "string? (optional)",
-            "type": "metal|crypto|stock? (optional)",
+            "type": "metal|crypto|stock|savings? (optional)",
             "icon": "string? (optional)",
-            "iconBg": "string? (optional)"
+            "iconBg": "string? (optional)",
+            "interestRate": "number? (optional, annual rate %)",
+            "termMonths": "number? (optional, term in months)",
+            "bankName": "string? (optional, bank name)",
+            "maturityDate": "string? (optional, ISO date)"
           },
           "requestExample": {
             "name": "Vàng SJC 9999",
@@ -815,7 +920,7 @@
               "id": "string (UUID)",
               "code": "string",
               "name": "string",
-              "type": "metal|crypto|stock",
+              "type": "metal|crypto|stock|savings",
               "icon": "string",
               "iconBg": "string",
               "createdAt": "string (ISO 8601)",
@@ -869,7 +974,7 @@
           "response": {
             "data": {
               "assetCode": "string",
-              "assetType": "metal|crypto|stock",
+              "assetType": "metal|crypto|stock|savings",
               "icon": "string (emoji)",
               "iconBg": "string (CSS color)",
               "metrics": {
@@ -1042,8 +1147,8 @@
           "response": {
             "data": [
               {
-                "assetType": "metal|crypto|stock",
-                "name": "string (Metal, Crypto, Stock)",
+                "assetType": "metal|crypto|stock|savings",
+                "name": "string (Metal, Crypto, Stock, Savings)",
                 "value": "number (VND, total value for this type)",
                 "actualPercent": "number (%, current allocation)",
                 "targetPercent": "number (%, target allocation)",
@@ -1088,7 +1193,7 @@
           "requestBody": {
             "targets": [
               {
-                "assetType": "metal|crypto|stock (required, enum)",
+                "assetType": "metal|crypto|stock|savings (required, enum)",
                 "targetPercent": "number (0-100, required)"
               }
             ]
@@ -1128,7 +1233,7 @@
             "data": {
               "actions": [
                 {
-                  "assetType": "metal|crypto|stock",
+                  "assetType": "metal|crypto|stock|savings",
                   "action": "buy|sell",
                   "amount": "number (VND, recommended trade amount)",
                   "description": "string (localized recommendation text)"
@@ -1197,7 +1302,8 @@
               "series": {
                 "metal": "number[] (VND value per month)",
                 "crypto": "number[] (VND value per month)",
-                "stock": "number[] (VND value per month)"
+                "stock": "number[] (VND value per month)",
+                "savings": "number[] (VND value per month)"
               }
             }
           },
@@ -1207,7 +1313,8 @@
               "series": {
                 "metal": [100000000, 120000000, 150000000],
                 "crypto": [80000000, 90000000, 110000000],
-                "stock": [50000000, 55000000, 60000000]
+                "stock": [50000000, 55000000, 60000000],
+                "savings": [50000000, 50200000, 50400000]
               }
             }
           }
@@ -1448,6 +1555,253 @@
                 "profit": 31515152,
                 "profitPercent": 12.12
               }
+            }
+          }
+        }
+      ]
+    }
+    ,
+    {
+      "group": "Goals",
+      "prefix": "/api/goals",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/goals",
+          "description": "List all financial goals with calculated progress. If goal has linkedAssets, progress is calculated from current portfolio holdings. Otherwise uses manual currentAmount.",
+          "auth": true,
+          "response": {
+            "data": [
+              {
+                "id": "string (UUID)",
+                "name": "string",
+                "targetAmount": "number (VND)",
+                "deadline": "string (YYYY-MM-DD)",
+                "linkedAssets": "string[] (asset codes, may be empty)",
+                "currentAmount": "number|null (manual amount when not linked)",
+                "icon": "string (emoji)",
+                "iconBg": "string (CSS color)",
+                "progress": {
+                  "currentValue": "number (VND, auto-calculated or manual)",
+                  "targetAmount": "number (VND)",
+                  "progressPercent": "number (%, 0-100)",
+                  "remainingAmount": "number (VND)",
+                  "daysRemaining": "number",
+                  "onTrack": "boolean (linear projection reaches target by deadline)"
+                }
+              }
+            ]
+          },
+          "responseExample": {
+            "data": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "name": "Emergency Fund",
+                "targetAmount": 100000000,
+                "deadline": "2027-01-01",
+                "linkedAssets": ["BTC", "ETH"],
+                "currentAmount": null,
+                "icon": "🎯",
+                "iconBg": "rgba(59,130,246,0.2)",
+                "progress": {
+                  "currentValue": 65000000,
+                  "targetAmount": 100000000,
+                  "progressPercent": 65,
+                  "remainingAmount": 35000000,
+                  "daysRemaining": 267,
+                  "onTrack": true
+                }
+              },
+              {
+                "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+                "name": "House Down Payment",
+                "targetAmount": 500000000,
+                "deadline": "2028-06-01",
+                "linkedAssets": [],
+                "currentAmount": 150000000,
+                "icon": "🏠",
+                "iconBg": "rgba(34,197,94,0.2)",
+                "progress": {
+                  "currentValue": 150000000,
+                  "targetAmount": 500000000,
+                  "progressPercent": 30,
+                  "remainingAmount": 350000000,
+                  "daysRemaining": 784,
+                  "onTrack": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/goals/summary",
+          "description": "Get aggregated goals summary with counts by status",
+          "auth": true,
+          "response": {
+            "data": {
+              "totalGoals": "number",
+              "onTrackCount": "number (on track but not yet completed)",
+              "atRiskCount": "number (not on track, below 100%)",
+              "completedCount": "number (progress >= 100%)"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "totalGoals": 3,
+              "onTrackCount": 1,
+              "atRiskCount": 1,
+              "completedCount": 1
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/goals/:id",
+          "description": "Get a specific financial goal with detailed progress",
+          "auth": true,
+          "params": {
+            "id": "string (UUID, required)"
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "name": "string",
+              "targetAmount": "number",
+              "deadline": "string (YYYY-MM-DD)",
+              "linkedAssets": "string[]",
+              "currentAmount": "number|null",
+              "icon": "string",
+              "iconBg": "string",
+              "progress": {
+                "currentValue": "number",
+                "targetAmount": "number",
+                "progressPercent": "number",
+                "remainingAmount": "number",
+                "daysRemaining": "number",
+                "onTrack": "boolean"
+              }
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Financial goal not found",
+              "vi": "Không tìm thấy mục tiêu tài chính"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/goals",
+          "description": "Create a new financial goal. Link to specific assets for auto progress tracking, or leave linkedAssets empty and use currentAmount for manual tracking.",
+          "auth": true,
+          "requestBody": {
+            "name": "string (required, goal name)",
+            "targetAmount": "number (required, positive, target in VND)",
+            "deadline": "string (required, ISO date, e.g. '2027-01-01')",
+            "linkedAssets": "string[]? (optional, asset codes to track, e.g. ['BTC', 'ETH'])",
+            "currentAmount": "number? (optional, manual current amount when not linked)",
+            "icon": "string? (optional, default '🎯')",
+            "iconBg": "string? (optional, default 'rgba(59,130,246,0.2)')"
+          },
+          "requestExample": {
+            "name": "Emergency Fund",
+            "targetAmount": 100000000,
+            "deadline": "2027-01-01",
+            "linkedAssets": ["BTC", "ETH"],
+            "icon": "🎯",
+            "iconBg": "rgba(59,130,246,0.2)"
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "name": "string",
+              "targetAmount": "number",
+              "deadline": "string",
+              "linkedAssets": "string[]",
+              "currentAmount": "number|null",
+              "icon": "string",
+              "iconBg": "string",
+              "progress": {
+                "currentValue": "number",
+                "targetAmount": "number",
+                "progressPercent": "number",
+                "remainingAmount": "number",
+                "daysRemaining": "number",
+                "onTrack": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/goals/:id",
+          "description": "Update a financial goal. All fields optional.",
+          "auth": true,
+          "params": {
+            "id": "string (UUID, required)"
+          },
+          "requestBody": {
+            "name": "string? (optional)",
+            "targetAmount": "number? (optional)",
+            "deadline": "string? (optional, ISO date)",
+            "linkedAssets": "string[]? (optional)",
+            "currentAmount": "number? (optional)",
+            "icon": "string? (optional)",
+            "iconBg": "string? (optional)"
+          },
+          "requestExample": {
+            "currentAmount": 75000000
+          },
+          "response": {
+            "data": {
+              "id": "string (UUID)",
+              "name": "string",
+              "targetAmount": "number",
+              "deadline": "string",
+              "linkedAssets": "string[]",
+              "currentAmount": "number|null",
+              "icon": "string",
+              "iconBg": "string",
+              "progress": {
+                "currentValue": "number",
+                "targetAmount": "number",
+                "progressPercent": "number",
+                "remainingAmount": "number",
+                "daysRemaining": "number",
+                "onTrack": "boolean"
+              }
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Financial goal not found",
+              "vi": "Không tìm thấy mục tiêu tài chính"
+            }
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/goals/:id",
+          "description": "Delete a financial goal",
+          "auth": true,
+          "params": {
+            "id": "string (UUID, required)"
+          },
+          "response": {
+            "data": {
+              "success": "boolean"
+            }
+          },
+          "responseExample": {
+            "data": {
+              "success": true
+            }
+          },
+          "errors": {
+            "404": {
+              "en": "Financial goal not found",
+              "vi": "Không tìm thấy mục tiêu tài chính"
             }
           }
         }

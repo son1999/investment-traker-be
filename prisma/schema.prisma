@@ -21,16 +21,20 @@ model Currency {
 }
 
 model Asset {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  code      String
-  name      String
-  type      String   // metal, crypto, stock
-  currency  String   @default("VND") // currency code (VND, USDT, USD...)
-  icon      String
-  iconBg    String   @map("icon_bg")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  code         String
+  name         String
+  type         String    // metal, crypto, stock, savings
+  currency     String    @default("VND") // currency code (VND, USDT, USD...)
+  icon         String
+  iconBg       String    @map("icon_bg")
+  interestRate Float?    @map("interest_rate") // annual interest rate (%) - savings only
+  termMonths   Int?      @map("term_months") // savings term in months - savings only
+  bankName     String?   @map("bank_name") // bank name - savings only
+  maturityDate DateTime? @map("maturity_date") @db.Date // maturity date - savings only
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([userId, code])
   @@map("assets")
@@ -78,4 +82,20 @@ model AllocationTarget {
 
   @@unique([userId, assetType])
   @@map("allocation_targets")
+}
+
+model FinancialGoal {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  name          String
+  targetAmount  Float    @map("target_amount")
+  deadline      DateTime @db.Date
+  linkedAssets  String[] @map("linked_assets")
+  currentAmount Float?   @map("current_amount")
+  icon          String   @default("🎯")
+  iconBg        String   @default("rgba(59,130,246,0.2)") @map("icon_bg")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("financial_goals")
 }

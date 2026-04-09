@@ -1,13 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { ASSET_TYPES } from '../../common/constants/asset-types.js';
 
 export class CreateTransactionDto {
   @ApiProperty({ example: '2025-01-15' })
   @IsDateString()
   date: string;
 
-  @ApiProperty({ enum: ['metal', 'crypto', 'stock'] })
-  @IsEnum(['metal', 'crypto', 'stock'])
+  @ApiProperty({ enum: [...ASSET_TYPES] })
+  @IsEnum(ASSET_TYPES)
   assetType: string;
 
   @ApiProperty({ example: 'SJC' })

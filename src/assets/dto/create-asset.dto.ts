@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength, ValidateIf } from 'class-validator';
+import { ASSET_TYPES } from '../../common/constants/asset-types.js';
 
 export class CreateAssetDto {
   @ApiProperty({ example: 'SJC', description: 'Unique asset code' })
@@ -12,8 +13,8 @@ export class CreateAssetDto {
   @MinLength(1)
   name: string;
 
-  @ApiProperty({ enum: ['metal', 'crypto', 'stock'], example: 'metal' })
-  @IsEnum(['metal', 'crypto', 'stock'])
+  @ApiProperty({ enum: [...ASSET_TYPES], example: 'metal' })
+  @IsEnum(ASSET_TYPES)
   type: string;
 
   @ApiPropertyOptional({ example: 'USDT', description: 'Currency code for this asset (default: VND)' })
@@ -28,4 +29,27 @@ export class CreateAssetDto {
   @ApiProperty({ example: 'rgba(248,160,16,0.2)', description: 'Icon background color' })
   @IsString()
   iconBg: string;
+
+  // Savings-specific fields
+  @ApiPropertyOptional({ example: 5.5, description: 'Annual interest rate (%) - required for savings' })
+  @ValidateIf((o) => o.type === 'savings')
+  @IsNumber()
+  @IsPositive()
+  interestRate?: number;
+
+  @ApiPropertyOptional({ example: 12, description: 'Savings term in months - required for savings' })
+  @ValidateIf((o) => o.type === 'savings')
+  @IsNumber()
+  @Min(1)
+  termMonths?: number;
+
+  @ApiPropertyOptional({ example: 'Vietcombank', description: 'Bank name - for savings' })
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @ApiPropertyOptional({ example: '2026-01-15', description: 'Maturity date - for savings' })
+  @IsOptional()
+  @IsString()
+  maturityDate?: string;
 }

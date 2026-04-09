@@ -30,6 +30,13 @@ export const en = {
   INSUFFICIENT_HOLDINGS: 'Insufficient holdings. Available: {available}, requested: {requested}',
   TRANSACTION_NOT_FOUND: 'Transaction not found',
 
+  // Goals
+  GOAL_NOT_FOUND: 'Financial goal not found',
+
+  // CSV Import
+  CSV_EMPTY_FILE: 'CSV file is empty',
+  CSV_INVALID_FORMAT: 'Invalid CSV format',
+
   // HTTP errors
   INTERNAL_SERVER_ERROR: 'Internal server error',
   BAD_REQUEST: 'Bad Request',

@@ -1,10 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsEnum, IsNumber, Max, Min, ValidateNested } from 'class-validator';
+import { ASSET_TYPES } from '../../common/constants/asset-types.js';
 
 export class AllocationTargetItem {
-  @ApiProperty({ enum: ['metal', 'crypto', 'stock'] })
-  @IsEnum(['metal', 'crypto', 'stock'])
+  @ApiProperty({ enum: [...ASSET_TYPES] })
+  @IsEnum(ASSET_TYPES)
   assetType: string;
 
   @ApiProperty({ example: 30 })

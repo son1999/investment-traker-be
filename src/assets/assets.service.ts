@@ -61,6 +61,12 @@ export class AssetsService {
         currency,
         icon: dto.icon,
         iconBg: dto.iconBg,
+        ...(dto.type === 'savings' && {
+          interestRate: dto.interestRate,
+          termMonths: dto.termMonths,
+          bankName: dto.bankName || null,
+          maturityDate: dto.maturityDate ? new Date(dto.maturityDate) : null,
+        }),
       },
     });
   }
@@ -80,6 +86,10 @@ export class AssetsService {
         ...(dto.type !== undefined && { type: dto.type }),
         ...(dto.icon !== undefined && { icon: dto.icon }),
         ...(dto.iconBg !== undefined && { iconBg: dto.iconBg }),
+        ...(dto.interestRate !== undefined && { interestRate: dto.interestRate }),
+        ...(dto.termMonths !== undefined && { termMonths: dto.termMonths }),
+        ...(dto.bankName !== undefined && { bankName: dto.bankName }),
+        ...(dto.maturityDate !== undefined && { maturityDate: new Date(dto.maturityDate) }),
       },
     });
   }

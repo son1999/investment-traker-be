@@ -95,7 +95,7 @@ export class AssetDetailResponseDto {
   @ApiProperty({ example: 'SJC' })
   assetCode: string;
 
-  @ApiProperty({ enum: ['metal', 'crypto', 'stock'], example: 'metal' })
+  @ApiProperty({ enum: ['metal', 'crypto', 'stock', 'savings'], example: 'metal' })
   assetType: string;
 
   @ApiProperty({ example: '🥇' })

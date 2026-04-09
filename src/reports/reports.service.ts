@@ -73,7 +73,7 @@ export class ReportsService {
     });
 
     const sortedMonthKeys = Array.from(monthlyHoldings.keys()).sort();
-    const series: Record<string, number[]> = { metal: [], crypto: [], stock: [] };
+    const series: Record<string, number[]> = { metal: [], crypto: [], stock: [], savings: [] };
     const monthLabels: string[] = [];
 
     const cumulativeHoldings = new Map<string, { qty: number; type: string }>();
@@ -92,7 +92,7 @@ export class ReportsService {
         txIdx++;
       }
 
-      const typeValues: Record<string, number> = { metal: 0, crypto: 0, stock: 0 };
+      const typeValues: Record<string, number> = { metal: 0, crypto: 0, stock: 0, savings: 0 };
       cumulativeHoldings.forEach((h, code) => {
         if (h.qty > 0) {
           const price = priceMap.get(code) || 0;
@@ -106,6 +106,7 @@ export class ReportsService {
       series.metal.push(Math.round(typeValues.metal));
       series.crypto.push(Math.round(typeValues.crypto));
       series.stock.push(Math.round(typeValues.stock));
+      series.savings.push(Math.round(typeValues.savings));
     }
 
     return { months: monthLabels, series };

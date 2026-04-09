@@ -58,10 +58,11 @@ export class AllocationService {
       metal: 'Metal',
       crypto: 'Crypto',
       stock: 'Stock',
+      savings: 'Savings',
     };
 
     const result: any[] = [];
-    for (const assetType of ['metal', 'crypto', 'stock']) {
+    for (const assetType of ['metal', 'crypto', 'stock', 'savings']) {
       const value = typeValues.get(assetType) || 0;
       const actualPercent = totalValue > 0 ? Math.round((value / totalValue) * 10000) / 100 : 0;
       const targetPercent = targetMap.get(assetType) || 0;

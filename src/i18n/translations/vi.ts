@@ -30,6 +30,13 @@ export const vi = {
   INSUFFICIENT_HOLDINGS: 'Không đủ số lượng nắm giữ. Khả dụng: {available}, yêu cầu: {requested}',
   TRANSACTION_NOT_FOUND: 'Không tìm thấy giao dịch',
 
+  // Goals
+  GOAL_NOT_FOUND: 'Không tìm thấy mục tiêu tài chính',
+
+  // CSV Import
+  CSV_EMPTY_FILE: 'File CSV trống',
+  CSV_INVALID_FORMAT: 'Định dạng CSV không hợp lệ',
+
   // HTTP errors
   INTERNAL_SERVER_ERROR: 'Lỗi máy chủ nội bộ',
   BAD_REQUEST: 'Yêu cầu không hợp lệ',

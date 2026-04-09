@@ -17,7 +17,7 @@ export class AssetsController {
 
   @Get()
   @ApiOperation({ summary: 'List all assets, optionally filtered by type' })
-  @ApiQuery({ name: 'type', required: false, enum: ['metal', 'crypto', 'stock'] })
+  @ApiQuery({ name: 'type', required: false, enum: ['metal', 'crypto', 'stock', 'savings'] })
   async findAll(
     @CurrentUser() user: AuthUser,
     @Query('type') type?: string,

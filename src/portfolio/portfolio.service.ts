@@ -198,6 +198,7 @@ export class PortfolioService {
       metal: 'Metal',
       crypto: 'Crypto',
       stock: 'Stock',
+      savings: 'Savings',
     };
 
     const result: any[] = [];

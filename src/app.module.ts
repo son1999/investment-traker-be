@@ -11,6 +11,7 @@ import { ReportsModule } from './reports/reports.module.js';
 import { AssetsModule } from './assets/assets.module.js';
 import { AllocationModule } from './allocation/allocation.module.js';
 import { CurrenciesModule } from './currencies/currencies.module.js';
+import { GoalsModule } from './goals/goals.module.js';
 import { I18nModule } from './i18n/i18n.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 
@@ -28,6 +29,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
     AssetsModule,
     AllocationModule,
     CurrenciesModule,
+    GoalsModule,
   ],
   providers: [
     {

@@ -4,6 +4,7 @@ import { I18nService } from '../i18n/i18n.service.js';
 import { CreateTransactionDto } from './dto/create-transaction.dto.js';
 import { QueryTransactionDto } from './dto/query-transaction.dto.js';
 import { toDateStr } from '../common/helpers/period.helper.js';
+import { parseCsvBuffer, type CsvParseError } from './helpers/csv-parser.helper.js';
 
 @Injectable()
 export class TransactionsService {
@@ -118,5 +119,99 @@ export class TransactionsService {
       where: { id: { in: ids }, userId },
     });
     return { deleted: result.count };
+  }
+
+  async importCsv(userId: string, buffer: Buffer) {
+    const { parsed, errors } = parseCsvBuffer(buffer);
+
+    if (parsed.length === 0) {
+      return { successCount: 0, errorCount: errors.length, errors };
+    }
+
+    // Load all user assets for validation
+    const assets = await this.prisma.asset.findMany({
+      where: { userId },
+      select: { code: true, currency: true, icon: true, iconBg: true },
+    });
+    const assetMap = new Map(assets.map((a) => [a.code, a]));
+
+    // Load current holdings for sell validation
+    const transactions = await this.prisma.transaction.findMany({
+      where: { userId },
+      select: { assetCode: true, action: true, quantity: true },
+    });
+    const holdingsMap = new Map<string, number>();
+    transactions.forEach((t) => {
+      const current = holdingsMap.get(t.assetCode) || 0;
+      holdingsMap.set(
+        t.assetCode,
+        t.action === 'MUA' ? current + t.quantity : current - t.quantity,
+      );
+    });
+
+    const validRows: {
+      date: Date;
+      assetType: string;
+      assetCode: string;
+      action: string;
+      quantity: number;
+      unitPrice: number;
+      currency: string;
+      note: string | null;
+      icon: string;
+      iconBg: string;
+    }[] = [];
+    const importErrors: CsvParseError[] = [...errors];
+
+    for (let i = 0; i < parsed.length; i++) {
+      const row = parsed[i];
+      const rowNum = i + 2; // header + 1-based
+
+      const asset = assetMap.get(row.assetCode);
+      if (!asset) {
+        importErrors.push({ row: rowNum, message: `Asset ${row.assetCode} not registered` });
+        continue;
+      }
+
+      if (row.action === 'BAN') {
+        const holding = holdingsMap.get(row.assetCode) || 0;
+        if (row.quantity > holding) {
+          importErrors.push({
+            row: rowNum,
+            message: `Insufficient holdings for ${row.assetCode}. Available: ${holding}, requested: ${row.quantity}`,
+          });
+          continue;
+        }
+        holdingsMap.set(row.assetCode, holding - row.quantity);
+      } else {
+        const holding = holdingsMap.get(row.assetCode) || 0;
+        holdingsMap.set(row.assetCode, holding + row.quantity);
+      }
+
+      validRows.push({
+        date: new Date(row.date),
+        assetType: row.assetType,
+        assetCode: row.assetCode,
+        action: row.action,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        currency: asset.currency,
+        note: row.note || null,
+        icon: row.icon || asset.icon,
+        iconBg: row.iconBg || asset.iconBg,
+      });
+    }
+
+    if (validRows.length > 0) {
+      await this.prisma.transaction.createMany({
+        data: validRows.map((r) => ({ userId, ...r })),
+      });
+    }
+
+    return {
+      successCount: validRows.length,
+      errorCount: importErrors.length,
+      errors: importErrors,
+    };
   }
 }

@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard.js';
 import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator.js';
 import { TransactionsService } from './transactions.service.js';
@@ -7,6 +8,7 @@ import { CreateTransactionDto } from './dto/create-transaction.dto.js';
 import { QueryTransactionDto } from './dto/query-transaction.dto.js';
 import { BulkDeleteDto } from './dto/bulk-delete.dto.js';
 import { TransactionResponseDto, TransactionListResponseDto, BulkDeleteResponseDto } from './dto/transaction-response.dto.js';
+import { CsvImportResultDto } from './dto/csv-import.dto.js';
 import { SuccessResponseDto } from '../common/dto/api-response.dto.js';
 
 @ApiTags('Transactions')
@@ -56,5 +58,26 @@ export class TransactionsController {
   @ApiResponse({ status: 200, description: 'Transactions deleted', type: BulkDeleteResponseDto })
   async bulkDelete(@CurrentUser() user: AuthUser, @Body() dto: BulkDeleteDto) {
     return this.transactionsService.bulkDelete(user.id, dto.ids);
+  }
+
+  @Post('import-csv')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Import transactions from CSV file' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Import result', type: CsvImportResultDto })
+  async importCsv(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return this.transactionsService.importCsv(user.id, file.buffer);
   }
 }
