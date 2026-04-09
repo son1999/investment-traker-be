@@ -18,11 +18,14 @@ export class GoldProvider {
   }
 
   // Map common gold asset codes to SJC TypeName keywords
+  // Users can create assets with any of these codes
   private static readonly GOLD_TYPE_MAP: Record<string, string> = {
+    GOLD: 'Vàng SJC 1L, 10L, 1KG',
     SJC: 'Vàng SJC 1L, 10L, 1KG',
     'SJC-5CHI': 'Vàng SJC 5 chỉ',
     'NHAN-SJC': 'Vàng nhẫn SJC 99,99% 1 chỉ, 2 chỉ, 5 chỉ',
     '9999': 'Vàng nhẫn SJC 99,99% 1 chỉ, 2 chỉ, 5 chỉ',
+    NHAN9999: 'Vàng nhẫn SJC 99,99% 1 chỉ, 2 chỉ, 5 chỉ',
     PNJ: 'Nữ trang 99,99%',
   };
 
@@ -48,10 +51,15 @@ export class GoldProvider {
       // Only use HCM branch prices (most standard)
       const hcmPrices = result.data.filter((d) => d.BranchName === 'Hồ Chí Minh');
 
+      // SJC API returns price per lượng (tael = 10 chỉ)
+      // Convert to price per chỉ (1/10 lượng) so users can track in chỉ units
       for (const [code, typeName] of Object.entries(GoldProvider.GOLD_TYPE_MAP)) {
         const item = hcmPrices.find((d) => d.TypeName === typeName);
         if (item && item.SellValue > 0) {
-          map.set(code, { buy: item.BuyValue, sell: item.SellValue });
+          map.set(code, {
+            buy: Math.round(item.BuyValue / 10),
+            sell: Math.round(item.SellValue / 10),
+          });
         }
       }
 
