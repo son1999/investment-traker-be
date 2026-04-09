@@ -76,27 +76,35 @@ export class PriceFetcherService {
   async refreshAllPrices(userId: string) {
     const assets = await this.prisma.asset.findMany({
       where: { userId },
-      select: { code: true, type: true, icon: true },
+      select: { code: true, type: true, icon: true, currency: true },
     });
 
     const updates: { code: string; price: number; icon: string; type: string }[] = [];
 
-    // Batch crypto prices via CoinGecko (single API call)
+    // Batch crypto prices via CoinGecko
     const cryptoAssets = assets.filter((a) => a.type === 'crypto');
     if (cryptoAssets.length > 0) {
-      const coinIdMap = new Map<string, string>();
+      const coinIdMap = new Map<string, { assetCode: string; currency: string }>();
+      const allCurrencies = new Set<string>();
+
       for (const asset of cryptoAssets) {
         const coinId = this.coinGecko.getCoinId(asset.code);
-        if (coinId) coinIdMap.set(coinId, asset.code);
+        if (coinId) {
+          const cur = (asset.currency || 'VND').toLowerCase();
+          // CoinGecko uses 'usd' for USDT as well
+          const cgCurrency = cur === 'usdt' ? 'usd' : cur;
+          coinIdMap.set(coinId, { assetCode: asset.code, currency: cgCurrency });
+          allCurrencies.add(cgCurrency);
+        }
       }
 
       if (coinIdMap.size > 0) {
         const prices = await this.coinGecko.fetchPrices(
           Array.from(coinIdMap.keys()),
-          ['vnd'],
+          Array.from(allCurrencies),
         );
-        for (const [coinId, assetCode] of coinIdMap) {
-          const price = prices[coinId]?.vnd;
+        for (const [coinId, { assetCode, currency }] of coinIdMap) {
+          const price = prices[coinId]?.[currency];
           if (price !== undefined) {
             const asset = cryptoAssets.find((a) => a.code === assetCode)!;
             updates.push({ code: assetCode, price, icon: asset.icon, type: 'crypto' });
@@ -134,6 +142,39 @@ export class PriceFetcherService {
       }
     }
 
+    // Refresh exchange rates (USDT, USD, etc. → VND) via CoinGecko
+    const exchangeRateUpdates: { code: string; rate: number }[] = [];
+    const userCurrencies = await this.prisma.currency.findMany({ where: { userId } });
+    if (userCurrencies.length > 0) {
+      // Map currency codes to CoinGecko stablecoin IDs
+      const currencyToCoinId: Record<string, string> = {
+        USDT: 'tether',
+        USD: 'usd-coin',
+        USDC: 'usd-coin',
+      };
+
+      const toFetch: { code: string; coinId: string }[] = [];
+      for (const cur of userCurrencies) {
+        const coinId = currencyToCoinId[cur.code.toUpperCase()];
+        if (coinId) toFetch.push({ code: cur.code, coinId });
+      }
+
+      if (toFetch.length > 0) {
+        const coinIds = [...new Set(toFetch.map((t) => t.coinId))];
+        const rates = await this.coinGecko.fetchPrices(coinIds, ['vnd']);
+        for (const { code, coinId } of toFetch) {
+          const rate = rates[coinId]?.vnd;
+          if (rate) {
+            await this.prisma.currency.update({
+              where: { userId_code: { userId, code } },
+              data: { rateToVnd: rate },
+            });
+            exchangeRateUpdates.push({ code, rate });
+          }
+        }
+      }
+    }
+
     // Bulk update prices in DB
     if (updates.length > 0) {
       for (const update of updates) {
@@ -153,6 +194,7 @@ export class PriceFetcherService {
 
     return {
       updated: updates.map((u) => ({ code: u.code, type: u.type, price: u.price })),
+      exchangeRates: exchangeRateUpdates,
       count: updates.length,
     };
   }
