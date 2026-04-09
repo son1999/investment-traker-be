@@ -80,7 +80,7 @@ date,assetType,assetCode,action,quantity,unitPrice,note
 ## 3. API Giá Real-time (CoinGecko + VnStock)
 
 ### Mô tả
-Backend giờ có thể tự động fetch giá từ CoinGecko (crypto) và VnStock (cổ phiếu VN). Giá được cache 5 phút. Cổ phiếu chỉ fetch trong giờ giao dịch (9h-15h VN, thứ 2-6).
+Backend giờ có thể tự động fetch giá từ CoinGecko (crypto) và CafeF (cổ phiếu VN - HOSE + HNX). Giá crypto cache 5 phút. Cổ phiếu: cache 5 phút trong giờ giao dịch (9h-15h VN), cache 1 giờ ngoài giờ. CafeF free, không cần API key.
 
 ### API mới
 
@@ -125,7 +125,7 @@ BTC, ETH, USDT, BNB, SOL, XRP, ADA, DOGE, DOT, MATIC, LINK, UNI, AVAX, ATOM, NEA
 - Sau khi refresh, cập nhật lại portfolio summary, holdings, charts
 - Hiển thị thời gian cập nhật cuối (từ `updatedAt` trong price data)
 - Có thể auto-refresh mỗi 5 phút khi user đang xem Dashboard
-- Indicator cho stock: "Ngoài giờ giao dịch" khi ngoài 9h-15h
+- Indicator cho stock: "Ngoài giờ giao dịch" khi ngoài 9h-15h (giá vẫn hiển thị = giá cuối phiên)
 - Metal & Savings: vẫn nhập giá thủ công (không có auto-fetch)
 
 ---

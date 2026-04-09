@@ -7,7 +7,8 @@ import { VnStockProvider } from './providers/vnstock.provider.js';
 import { isVietnamTradingHours } from './helpers/trading-hours.helper.js';
 
 const CRYPTO_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const STOCK_CACHE_TTL = 5 * 60 * 1000; // 5 minutes during trading hours
+const STOCK_TRADING_CACHE_TTL = 5 * 60 * 1000; // 5 min during trading hours
+const STOCK_CLOSED_CACHE_TTL = 60 * 60 * 1000; // 1 hour outside trading hours
 
 @Injectable()
 export class PriceFetcherService {
@@ -35,17 +36,12 @@ export class PriceFetcherService {
   async getStockPrice(code: string): Promise<number | null> {
     const cacheKey = `stock:${code}`;
     const cached = await this.cacheManager.get<number>(cacheKey);
-
-    // Outside trading hours, return cached value without calling API
-    if (!isVietnamTradingHours()) {
-      return cached ?? null;
-    }
-
     if (cached !== undefined && cached !== null) return cached;
 
     const price = await this.vnStock.fetchStockPrice(code);
     if (price !== null) {
-      await this.cacheManager.set(cacheKey, price, STOCK_CACHE_TTL);
+      const ttl = isVietnamTradingHours() ? STOCK_TRADING_CACHE_TTL : STOCK_CLOSED_CACHE_TTL;
+      await this.cacheManager.set(cacheKey, price, ttl);
     }
     return price;
   }
@@ -94,14 +90,17 @@ export class PriceFetcherService {
       }
     }
 
-    // Fetch stock prices (only during trading hours)
-    if (isVietnamTradingHours()) {
-      const stockAssets = assets.filter((a) => a.type === 'stock');
+    // Batch stock prices via CafeF (single batch call for all stocks)
+    const stockAssets = assets.filter((a) => a.type === 'stock');
+    if (stockAssets.length > 0) {
+      const allStockPrices = await this.vnStock.fetchAllStockPrices();
+      const ttl = isVietnamTradingHours() ? STOCK_TRADING_CACHE_TTL : STOCK_CLOSED_CACHE_TTL;
+
       for (const asset of stockAssets) {
-        const price = await this.vnStock.fetchStockPrice(asset.code);
-        if (price !== null) {
+        const price = allStockPrices.get(asset.code.toUpperCase());
+        if (price !== undefined) {
           updates.push({ code: asset.code, price, icon: asset.icon, type: 'stock' });
-          await this.cacheManager.set(`stock:${asset.code}`, price, STOCK_CACHE_TTL);
+          await this.cacheManager.set(`stock:${asset.code}`, price, ttl);
         }
       }
     }

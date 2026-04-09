@@ -592,7 +592,7 @@
         {
           "method": "POST",
           "path": "/api/prices/refresh",
-          "description": "Refresh all asset prices from external APIs. Crypto via CoinGecko (BTC, ETH, etc), stocks via VnStock (during trading hours 9h-15h Vietnam time only). Metal/savings are not auto-fetched. Prices are cached for 5 minutes.",
+          "description": "Refresh all asset prices from external APIs. Crypto via CoinGecko, stocks via CafeF (HOSE+HNX). During trading hours (9h-15h ICT) stock prices cache 5 min, outside hours cache 1 hour. Metal/savings are not auto-fetched.",
           "auth": true,
           "requestBody": null,
           "response": {
@@ -618,7 +618,7 @@
             }
           },
           "notes": {
-            "cachingStrategy": "Crypto: cached 5 min (CoinGecko free = 10k calls/month). Stocks: cached 5 min during trading hours (9h-15h ICT Mon-Fri), no API call outside hours.",
+            "cachingStrategy": "Crypto: cached 5 min (CoinGecko free = 10k calls/month). Stocks via CafeF: cached 5 min during trading hours (9h-15h ICT Mon-Fri), 1 hour cache outside hours. CafeF is free, no API key needed.",
             "supportedCrypto": "BTC, ETH, USDT, BNB, SOL, XRP, ADA, DOGE, DOT, MATIC, LINK, UNI, AVAX, ATOM, NEAR, APT, SUI"
           }
         },
