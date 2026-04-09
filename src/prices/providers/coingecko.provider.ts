@@ -26,12 +26,14 @@ const COIN_ID_MAP: Record<string, string> = {
 export class CoinGeckoProvider {
   private readonly logger = new Logger(CoinGeckoProvider.name);
   private readonly baseUrl: string;
+  private readonly apiKey: string;
 
   constructor(private configService: ConfigService) {
     this.baseUrl = this.configService.get<string>(
       'COINGECKO_BASE_URL',
       'https://api.coingecko.com/api/v3',
     );
+    this.apiKey = this.configService.get<string>('COINGECKO_API_KEY', '');
   }
 
   getCoinId(assetCode: string): string | null {
@@ -47,7 +49,11 @@ export class CoinGeckoProvider {
     const url = `${this.baseUrl}/simple/price?ids=${coinIds.join(',')}&vs_currencies=${currencies.join(',')}`;
 
     try {
-      const response = await fetch(url);
+      const headers: Record<string, string> = {};
+      if (this.apiKey) {
+        headers['x-cg-demo-api-key'] = this.apiKey;
+      }
+      const response = await fetch(url, { headers });
       if (!response.ok) {
         this.logger.warn(`CoinGecko API error: ${response.status}`);
         return {};

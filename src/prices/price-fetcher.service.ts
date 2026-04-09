@@ -4,6 +4,7 @@ import { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoinGeckoProvider } from './providers/coingecko.provider.js';
 import { VnStockProvider } from './providers/vnstock.provider.js';
+import { GoldProvider } from './providers/gold.provider.js';
 import { isVietnamTradingHours } from './helpers/trading-hours.helper.js';
 
 const CRYPTO_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -19,6 +20,7 @@ export class PriceFetcherService {
     private prisma: PrismaService,
     private coinGecko: CoinGeckoProvider,
     private vnStock: VnStockProvider,
+    private gold: GoldProvider,
   ) {}
 
   async getCryptoPrice(code: string): Promise<number | null> {
@@ -46,14 +48,28 @@ export class PriceFetcherService {
     return price;
   }
 
+  async getGoldPrice(code: string): Promise<number | null> {
+    const cacheKey = `gold:${code}`;
+    const cached = await this.cacheManager.get<number>(cacheKey);
+    if (cached !== undefined && cached !== null) return cached;
+
+    const price = await this.gold.fetchGoldPrice(code);
+    if (price !== null) {
+      await this.cacheManager.set(cacheKey, price, CRYPTO_CACHE_TTL); // 5 min cache
+    }
+    return price;
+  }
+
   async getLivePrice(code: string, type: string): Promise<number | null> {
     switch (type) {
       case 'crypto':
         return this.getCryptoPrice(code);
       case 'stock':
         return this.getStockPrice(code);
+      case 'metal':
+        return this.getGoldPrice(code);
       default:
-        return null; // metal/savings: no auto-fetch
+        return null; // savings: no auto-fetch
     }
   }
 
@@ -101,6 +117,19 @@ export class PriceFetcherService {
         if (price !== undefined) {
           updates.push({ code: asset.code, price, icon: asset.icon, type: 'stock' });
           await this.cacheManager.set(`stock:${asset.code}`, price, ttl);
+        }
+      }
+    }
+
+    // Batch gold prices via SJC
+    const metalAssets = assets.filter((a) => a.type === 'metal');
+    if (metalAssets.length > 0) {
+      const allGoldPrices = await this.gold.fetchAllGoldPrices();
+      for (const asset of metalAssets) {
+        const goldPrice = allGoldPrices.get(asset.code.toUpperCase());
+        if (goldPrice) {
+          updates.push({ code: asset.code, price: goldPrice.sell, icon: asset.icon, type: 'metal' });
+          await this.cacheManager.set(`gold:${asset.code}`, goldPrice.sell, CRYPTO_CACHE_TTL);
         }
       }
     }

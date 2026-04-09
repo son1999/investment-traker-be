@@ -67,7 +67,7 @@ export class PricesController {
   @Get(':code/live')
   @ApiOperation({ summary: 'Get live price for a specific asset (with cache)' })
   @ApiParam({ name: 'code', description: 'Asset code', example: 'BTC' })
-  @ApiQuery({ name: 'type', required: true, enum: ['crypto', 'stock'], description: 'Asset type' })
+  @ApiQuery({ name: 'type', required: true, enum: ['crypto', 'stock', 'metal'], description: 'Asset type' })
   @ApiResponse({ status: 200, description: 'Live price' })
   async getLivePrice(
     @CurrentUser() user: AuthUser,

@@ -5,11 +5,12 @@ import { PricesService } from './prices.service.js';
 import { PriceFetcherService } from './price-fetcher.service.js';
 import { CoinGeckoProvider } from './providers/coingecko.provider.js';
 import { VnStockProvider } from './providers/vnstock.provider.js';
+import { GoldProvider } from './providers/gold.provider.js';
 
 @Module({
   imports: [CacheModule.register({ ttl: 300000 })], // 5 min default
   controllers: [PricesController],
-  providers: [PricesService, PriceFetcherService, CoinGeckoProvider, VnStockProvider],
+  providers: [PricesService, PriceFetcherService, CoinGeckoProvider, VnStockProvider, GoldProvider],
   exports: [PricesService, PriceFetcherService],
 })
 export class PricesModule {}
