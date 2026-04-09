@@ -362,21 +362,52 @@
             "assetCode": "string (required)",
             "action": "MUA|BAN (required, enum)",
             "quantity": "number (positive, required)",
-            "unitPrice": "number (positive, required)",
+            "unitPrice": "number? (positive, required if totalAmount not provided. Price per 1 unit in asset currency)",
+            "totalAmount": "number? (positive, required if unitPrice not provided. Total spent/received. BE calculates unitPrice = totalAmount / quantity)",
             "note": "string? (optional)",
             "icon": "string (required, emoji)",
             "iconBg": "string (required, CSS color)"
           },
-          "requestExample": {
-            "date": "2025-01-15",
-            "assetType": "metal",
-            "assetCode": "SJC",
-            "action": "MUA",
-            "quantity": 2,
-            "unitPrice": 82500000,
-            "note": "Mua vàng đầu năm",
-            "icon": "🥇",
-            "iconBg": "rgba(248,160,16,0.2)"
+          "requestExamples": {
+            "crypto_with_totalAmount": {
+              "description": "Mua 0.0023 BTC, bỏ ra 70 USDT",
+              "body": {
+                "date": "2026-04-09",
+                "assetType": "crypto",
+                "assetCode": "BTC",
+                "action": "MUA",
+                "quantity": 0.0023,
+                "totalAmount": 70,
+                "icon": "₿",
+                "iconBg": "rgba(249,115,22,0.15)"
+              }
+            },
+            "stock_with_unitPrice": {
+              "description": "Mua 100 cổ HPG giá 27,000 VND/cổ",
+              "body": {
+                "date": "2026-04-09",
+                "assetType": "stock",
+                "assetCode": "HPG",
+                "action": "MUA",
+                "quantity": 100,
+                "unitPrice": 27000,
+                "icon": "📈",
+                "iconBg": "rgba(96,165,250,0.15)"
+              }
+            },
+            "gold_with_totalAmount": {
+              "description": "Mua 0.5 chỉ vàng SJC, tổng 8,500,000 VND",
+              "body": {
+                "date": "2026-04-09",
+                "assetType": "metal",
+                "assetCode": "GOLD",
+                "action": "MUA",
+                "quantity": 0.5,
+                "totalAmount": 8500000,
+                "icon": "🥇",
+                "iconBg": "rgba(248,160,16,0.2)"
+              }
+            }
           },
           "response": {
             "data": {

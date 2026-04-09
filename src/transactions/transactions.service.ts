@@ -51,6 +51,9 @@ export class TransactionsService {
   }
 
   async create(userId: string, dto: CreateTransactionDto) {
+    // Calculate unitPrice from totalAmount if not provided
+    const unitPrice = dto.unitPrice ?? (dto.totalAmount! / dto.quantity);
+
     const asset = await this.prisma.asset.findUnique({
       where: { userId_code: { userId, code: dto.assetCode } },
     });
@@ -90,7 +93,7 @@ export class TransactionsService {
         assetCode: dto.assetCode,
         action: dto.action,
         quantity: dto.quantity,
-        unitPrice: dto.unitPrice,
+        unitPrice,
         currency: asset.currency,
         note: dto.note || null,
         icon: dto.icon,

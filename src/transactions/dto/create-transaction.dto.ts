@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString, ValidateIf } from 'class-validator';
 import { ASSET_TYPES } from '../../common/constants/asset-types.js';
 
 export class CreateTransactionDto {
@@ -19,15 +19,22 @@ export class CreateTransactionDto {
   @IsEnum(['MUA', 'BAN'])
   action: string;
 
-  @ApiProperty({ example: 2 })
+  @ApiProperty({ example: 0.0023, description: 'Quantity (e.g. 0.0023 BTC, 100 shares, 0.5 chỉ vàng)' })
   @IsNumber()
   @IsPositive()
   quantity: number;
 
-  @ApiProperty({ example: 82500000 })
+  @ApiPropertyOptional({ example: 82500000, description: 'Unit price per 1 unit. Required if totalAmount not provided.' })
+  @ValidateIf((o) => o.totalAmount === undefined || o.totalAmount === null)
   @IsNumber()
   @IsPositive()
-  unitPrice: number;
+  unitPrice?: number;
+
+  @ApiPropertyOptional({ example: 27.24, description: 'Total amount spent/received. If provided, unitPrice = totalAmount / quantity.' })
+  @ValidateIf((o) => o.unitPrice === undefined || o.unitPrice === null)
+  @IsNumber()
+  @IsPositive()
+  totalAmount?: number;
 
   @ApiPropertyOptional({ example: 'Mua dip Tet' })
   @IsOptional()
