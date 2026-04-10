@@ -22,3 +22,16 @@ export function toDateStr(date: Date): string {
 export function getMonthKey(date: Date): string {
   return toDateStr(date).substring(0, 7);
 }
+
+const ZERO_DECIMAL_CURRENCIES = new Set(['VND', 'JPY', 'KRW']);
+
+/**
+ * Round a monetary value based on currency.
+ * VND/JPY/KRW → 0 decimals, others (USD/USDT/EUR) → 2 decimals.
+ */
+export function roundByCurrency(value: number, currency: string): number {
+  if (ZERO_DECIMAL_CURRENCIES.has(currency)) {
+    return Math.round(value);
+  }
+  return Math.round(value * 100) / 100;
+}

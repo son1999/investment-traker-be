@@ -4,7 +4,7 @@ import { I18nService } from '../i18n/i18n.service.js';
 import { CreateAssetDto } from './dto/create-asset.dto.js';
 import { UpdateAssetDto } from './dto/update-asset.dto.js';
 import { QueryAssetTransactionsDto } from './dto/query-asset-transactions.dto.js';
-import { getPeriodStartDate, toDateStr } from '../common/helpers/period.helper.js';
+import { getPeriodStartDate, toDateStr, roundByCurrency } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class AssetsService {
@@ -175,12 +175,12 @@ export class AssetsService {
           date: toDateStr(t.date),
           quantity: qty,
           sellPrice: price,
-          profit: Math.round(sellProfit),
+          profit: roundByCurrency(sellProfit, currency),
         });
       }
     });
 
-    const avgCost = totalBuyQty > 0 ? Math.round(totalBuyCost / totalBuyQty) : 0;
+    const avgCost = totalBuyQty > 0 ? roundByCurrency(totalBuyCost / totalBuyQty, currency) : 0;
     const totalRealizedPnl = realizedTransactions.reduce((sum: number, rt: any) => sum + rt.profit, 0);
 
     let unrealizedTotal = 0;
@@ -203,14 +203,14 @@ export class AssetsService {
       lastKnownPrice = t.unitPrice;
       valueHistory.push({
         date: toDateStr(t.date),
-        value: Math.round(runningQty * lastKnownPrice),
+        value: roundByCurrency(runningQty * lastKnownPrice, currency),
       });
     });
 
     const today = toDateStr(new Date());
     const lastEntry = valueHistory[valueHistory.length - 1];
     if (currentPrice > 0 && lastEntry && lastEntry.date !== today && netQty > 0) {
-      valueHistory.push({ date: today, value: Math.round(netQty * currentPrice) });
+      valueHistory.push({ date: today, value: roundByCurrency(netQty * currentPrice, currency) });
     }
 
     return {
@@ -235,19 +235,19 @@ export class AssetsService {
           updatedAt: priceData?.updatedAt || null,
         },
         profit: {
-          amount: Math.round(profitAmount),
+          amount: roundByCurrency(profitAmount, currency),
           percent: profitPercent,
           positive: profitAmount >= 0,
         },
       },
       realizedPnl: {
-        total: Math.round(totalRealizedPnl),
+        total: roundByCurrency(totalRealizedPnl, currency),
         transactions: realizedTransactions,
       },
       unrealizedPnl: {
-        total: Math.round(unrealizedTotal),
-        currentValue: Math.round(currentValue),
-        totalCost: Math.round(remainingCost),
+        total: roundByCurrency(unrealizedTotal, currency),
+        currentValue: roundByCurrency(currentValue, currency),
+        totalCost: roundByCurrency(remainingCost, currency),
       },
       valueHistory,
     };
@@ -279,7 +279,7 @@ export class AssetsService {
       if (maxPrice !== undefined) where.unitPrice.lte = maxPrice;
     }
 
-    const [data, total] = await this.prisma.$transaction([
+    const [data, total, asset] = await this.prisma.$transaction([
       this.prisma.transaction.findMany({
         where,
         orderBy: { date: 'desc' },
@@ -287,7 +287,13 @@ export class AssetsService {
         take: limit,
       }),
       this.prisma.transaction.count({ where }),
+      this.prisma.asset.findUnique({
+        where: { userId_code: { userId, code } },
+        select: { currency: true },
+      }),
     ]);
+
+    const cur = asset?.currency || data[0]?.currency || 'VND';
 
     return {
       data: data.map((t) => ({
@@ -295,8 +301,9 @@ export class AssetsService {
         date: toDateStr(t.date),
         action: t.action,
         quantity: t.quantity,
-        unitPrice: t.unitPrice,
-        total: Math.round(t.quantity * t.unitPrice),
+        unitPrice: roundByCurrency(t.unitPrice, cur),
+        total: roundByCurrency(t.quantity * t.unitPrice, cur),
+        currency: cur,
         note: t.note,
       })),
       meta: {
