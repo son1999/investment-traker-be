@@ -6,6 +6,7 @@ import { I18nService } from '../../i18n/i18n.service.js';
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
   private guestEmail: string;
+  private guestOwnerId: string;
 
   constructor(
     private supabaseService: SupabaseService,
@@ -13,6 +14,7 @@ export class SupabaseAuthGuard implements CanActivate {
     private configService: ConfigService,
   ) {
     this.guestEmail = this.configService.get<string>('GUEST_EMAIL', '');
+    this.guestOwnerId = this.configService.get<string>('GUEST_OWNER_ID', '');
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -30,11 +32,13 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException(this.i18n.t('INVALID_TOKEN'));
     }
 
+    const isGuest = !!this.guestEmail && data.user.email === this.guestEmail;
+
     request.user = {
-      id: data.user.id,
+      id: isGuest && this.guestOwnerId ? this.guestOwnerId : data.user.id,
       email: data.user.email,
       token,
-      isGuest: !!this.guestEmail && data.user.email === this.guestEmail,
+      isGuest,
     };
 
     return true;
