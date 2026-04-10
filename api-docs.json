@@ -544,6 +544,7 @@
                 "icon": "string (emoji)",
                 "type": "metal|crypto|stock|savings",
                 "price": "number",
+                "currency": "string (currency the price is denominated in, e.g. VND, USDT)",
                 "updatedAt": "string (ISO 8601)"
               }
             ]
@@ -556,6 +557,16 @@
                 "icon": "🥇",
                 "type": "metal",
                 "price": 92500000,
+                "currency": "VND",
+                "updatedAt": "2025-06-01T10:30:00.000Z"
+              },
+              {
+                "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+                "code": "BTC",
+                "icon": "₿",
+                "type": "crypto",
+                "price": 84500,
+                "currency": "USDT",
                 "updatedAt": "2025-06-01T10:30:00.000Z"
               }
             ]
@@ -564,19 +575,21 @@
         {
           "method": "POST",
           "path": "/api/prices",
-          "description": "Create or update price entry. Returns 201 for new, 200 for update.",
+          "description": "Create or update price entry. Returns 201 for new, 200 for update. Currency defaults to VND if not provided.",
           "auth": true,
           "requestBody": {
             "code": "string (required)",
             "icon": "string (required, emoji)",
             "type": "metal|crypto|stock|savings (required, enum)",
-            "price": "number (min 0, required)"
+            "price": "number (min 0, required)",
+            "currency": "string? (optional, currency code the price is in, default VND)"
           },
           "requestExample": {
-            "code": "SJC",
-            "icon": "🥇",
-            "type": "metal",
-            "price": 92500000
+            "code": "BTC",
+            "icon": "₿",
+            "type": "crypto",
+            "price": 84500,
+            "currency": "USDT"
           },
           "response": {
             "data": {
@@ -585,6 +598,7 @@
               "icon": "string",
               "type": "metal|crypto|stock|savings",
               "price": "number",
+              "currency": "string (currency code)",
               "updatedAt": "string (ISO 8601)"
             }
           }
@@ -610,6 +624,7 @@
               "icon": "string",
               "type": "metal|crypto|stock|savings",
               "price": "number",
+              "currency": "string (currency code)",
               "updatedAt": "string (ISO 8601)"
             }
           },
@@ -623,7 +638,7 @@
         {
           "method": "POST",
           "path": "/api/prices/refresh",
-          "description": "Refresh all asset prices from external APIs. Crypto via CoinGecko, stocks via CafeF (HOSE+HNX). During trading hours (9h-15h ICT) stock prices cache 5 min, outside hours cache 1 hour. Metal/savings are not auto-fetched.",
+          "description": "Refresh all asset prices from external APIs. Crypto prices are fetched in the asset's currency (e.g. USDT for BTC). Stocks via CafeF (HOSE+HNX) in VND. Also refreshes exchange rates (USDT/USD→VND) via CoinGecko stablecoin prices.",
           "auth": true,
           "requestBody": null,
           "response": {
@@ -632,18 +647,27 @@
                 {
                   "code": "string (asset code)",
                   "type": "string (asset type)",
-                  "price": "number (new price)"
+                  "price": "number (new price in asset's currency)"
                 }
               ],
-              "count": "number (total updated)"
+              "exchangeRates": [
+                {
+                  "code": "string (currency code, e.g. USDT)",
+                  "rate": "number (rate to VND)"
+                }
+              ],
+              "count": "number (total prices updated)"
             }
           },
           "responseExample": {
             "data": {
               "updated": [
-                { "code": "BTC", "type": "crypto", "price": 2750000000 },
-                { "code": "ETH", "type": "crypto", "price": 85000000 },
+                { "code": "BTC", "type": "crypto", "price": 84500 },
+                { "code": "ETH", "type": "crypto", "price": 2200 },
                 { "code": "VNM", "type": "stock", "price": 78500 }
+              ],
+              "exchangeRates": [
+                { "code": "USDT", "rate": 25400 }
               ],
               "count": 3
             }
@@ -656,27 +680,29 @@
         {
           "method": "GET",
           "path": "/api/prices/:code/live",
-          "description": "Get live price for a specific asset with caching. Only works for crypto and stock types.",
+          "description": "Get live price for a specific asset with caching. Price is fetched in the asset's configured currency (e.g. USDT for crypto, VND for stocks). Only works for crypto, stock, and metal types.",
           "auth": true,
           "params": {
             "code": "string (asset code, e.g. 'BTC', 'VNM')"
           },
           "query": {
-            "type": "string (required, crypto|stock)"
+            "type": "string (required, crypto|stock|metal)"
           },
           "requestExample": "/api/prices/BTC/live?type=crypto",
           "response": {
             "data": {
               "code": "string",
               "type": "string",
-              "price": "number|null (null if not available)"
+              "price": "number|null (null if not available)",
+              "currency": "string (currency the price is in, from asset config)"
             }
           },
           "responseExample": {
             "data": {
               "code": "BTC",
               "type": "crypto",
-              "price": 2750000000
+              "price": 84500,
+              "currency": "USDT"
             }
           }
         }
@@ -997,7 +1023,7 @@
         {
           "method": "GET",
           "path": "/api/assets/:code/detail",
-          "description": "Get detailed asset info including FIFO P&L calculation, holdings metrics, realized/unrealized PnL, and value history",
+          "description": "Get detailed asset info including FIFO P&L calculation, holdings metrics, realized/unrealized PnL, and value history. All monetary values are in the asset's currency (e.g. USDT for crypto, VND for gold/stocks).",
           "auth": true,
           "params": {
             "code": "string (asset code, required)"
@@ -1006,6 +1032,7 @@
             "data": {
               "assetCode": "string",
               "assetType": "metal|crypto|stock|savings",
+              "currency": "string (asset currency code, e.g. VND, USDT)",
               "icon": "string (emoji)",
               "iconBg": "string (CSS color)",
               "metrics": {
@@ -1015,93 +1042,142 @@
                   "detail": "string (localized: '3 buy orders · 1 sell orders' or '3 lệnh mua · 1 lệnh bán')"
                 },
                 "avgCost": {
-                  "value": "number (VND, weighted average buy price)",
-                  "currency": "VND"
+                  "value": "number (weighted average buy price in asset currency)",
+                  "currency": "string (asset currency code)"
                 },
                 "currentPrice": {
-                  "value": "number (VND)",
-                  "currency": "VND",
+                  "value": "number (current price in asset currency)",
+                  "currency": "string (asset currency code)",
                   "updatedAt": "string|null (ISO 8601)"
                 },
                 "profit": {
-                  "amount": "number (VND, unrealized profit)",
+                  "amount": "number (unrealized profit in asset currency)",
                   "percent": "number (%)",
                   "positive": "boolean"
                 }
               },
               "realizedPnl": {
-                "total": "number (VND, total realized profit from sells)",
+                "total": "number (total realized profit in asset currency)",
                 "transactions": [
                   {
                     "date": "string (YYYY-MM-DD)",
                     "quantity": "number",
-                    "sellPrice": "number (VND per unit)",
-                    "profit": "number (VND, FIFO-calculated profit)"
+                    "sellPrice": "number (per unit in asset currency)",
+                    "profit": "number (FIFO-calculated profit in asset currency)"
                   }
                 ]
               },
               "unrealizedPnl": {
-                "total": "number (VND, unrealized profit on remaining lots)",
-                "currentValue": "number (VND, current value of holdings)",
-                "totalCost": "number (VND, cost basis of remaining lots)"
+                "total": "number (unrealized profit on remaining lots)",
+                "currentValue": "number (current value of holdings)",
+                "totalCost": "number (cost basis of remaining lots)"
               },
               "valueHistory": [
                 {
                   "date": "string (YYYY-MM-DD)",
-                  "value": "number (VND, portfolio value at each transaction)"
+                  "value": "number (value using historical price at each transaction, plus a today point with current price if still holding)"
                 }
               ]
             }
           },
-          "responseExample": {
-            "data": {
-              "assetCode": "SJC",
-              "assetType": "metal",
-              "icon": "🥇",
-              "iconBg": "rgba(248,160,16,0.2)",
-              "metrics": {
-                "holdings": {
-                  "quantity": 2,
-                  "unit": "SJC",
-                  "detail": "3 buy orders · 1 sell orders"
-                },
-                "avgCost": {
-                  "value": 82500000,
-                  "currency": "VND"
-                },
-                "currentPrice": {
-                  "value": 92500000,
-                  "currency": "VND",
-                  "updatedAt": "2025-06-01T10:30:00.000Z"
-                },
-                "profit": {
-                  "amount": 20000000,
-                  "percent": 12.12,
-                  "positive": true
-                }
-              },
-              "realizedPnl": {
-                "total": 5000000,
-                "transactions": [
-                  {
-                    "date": "2025-03-15",
-                    "quantity": 1,
-                    "sellPrice": 88000000,
-                    "profit": 5000000
+          "responseExamples": {
+            "gold_vnd": {
+              "description": "Gold asset priced in VND",
+              "data": {
+                "assetCode": "SJC",
+                "assetType": "metal",
+                "currency": "VND",
+                "icon": "🥇",
+                "iconBg": "rgba(248,160,16,0.2)",
+                "metrics": {
+                  "holdings": {
+                    "quantity": 2,
+                    "unit": "SJC",
+                    "detail": "3 buy orders · 1 sell orders"
+                  },
+                  "avgCost": {
+                    "value": 82500000,
+                    "currency": "VND"
+                  },
+                  "currentPrice": {
+                    "value": 92500000,
+                    "currency": "VND",
+                    "updatedAt": "2025-06-01T10:30:00.000Z"
+                  },
+                  "profit": {
+                    "amount": 20000000,
+                    "percent": 12.12,
+                    "positive": true
                   }
+                },
+                "realizedPnl": {
+                  "total": 5000000,
+                  "transactions": [
+                    {
+                      "date": "2025-03-15",
+                      "quantity": 1,
+                      "sellPrice": 88000000,
+                      "profit": 5000000
+                    }
+                  ]
+                },
+                "unrealizedPnl": {
+                  "total": 20000000,
+                  "currentValue": 185000000,
+                  "totalCost": 165000000
+                },
+                "valueHistory": [
+                  { "date": "2025-01-15", "value": 82500000 },
+                  { "date": "2025-02-10", "value": 170000000 },
+                  { "date": "2025-03-15", "value": 88000000 },
+                  { "date": "2025-04-20", "value": 185000000 },
+                  { "date": "2025-06-01", "value": 185000000 }
                 ]
-              },
-              "unrealizedPnl": {
-                "total": 20000000,
-                "currentValue": 185000000,
-                "totalCost": 165000000
-              },
-              "valueHistory": [
-                { "date": "2025-01-15", "value": 82500000 },
-                { "date": "2025-02-10", "value": 165000000 },
-                { "date": "2025-03-15", "value": 92500000 },
-                { "date": "2025-04-20", "value": 185000000 }
-              ]
+              }
+            },
+            "crypto_usdt": {
+              "description": "Crypto asset priced in USDT",
+              "data": {
+                "assetCode": "BTC",
+                "assetType": "crypto",
+                "currency": "USDT",
+                "icon": "₿",
+                "iconBg": "rgba(249,115,22,0.15)",
+                "metrics": {
+                  "holdings": {
+                    "quantity": 0.00023,
+                    "unit": "BTC",
+                    "detail": "1 lệnh mua · 0 lệnh bán"
+                  },
+                  "avgCost": {
+                    "value": 84500,
+                    "currency": "USDT"
+                  },
+                  "currentPrice": {
+                    "value": 87200,
+                    "currency": "USDT",
+                    "updatedAt": "2026-04-10T08:00:00.000Z"
+                  },
+                  "profit": {
+                    "amount": 1,
+                    "percent": 3.2,
+                    "positive": true
+                  }
+                },
+                "realizedPnl": {
+                  "total": 0,
+                  "transactions": []
+                },
+                "unrealizedPnl": {
+                  "total": 1,
+                  "currentValue": 20,
+                  "totalCost": 19
+                },
+                "valueHistory": [
+                  { "date": "2025-08-10", "value": 19 },
+                  { "date": "2026-04-10", "value": 20 }
+                ]
+              }
             }
           },
           "errors": {
@@ -1114,17 +1190,27 @@
         {
           "method": "GET",
           "path": "/api/assets/:code/transactions",
-          "description": "Get paginated transactions for a specific asset within a time period",
+          "description": "Get paginated transactions for a specific asset with advanced filters. Supports period shortcuts, custom date ranges, action filtering, and price range filtering.",
           "auth": true,
           "params": {
             "code": "string (asset code, required)"
           },
           "query": {
-            "period": "string? (1m|3m|6m|1y|all, default 1y)",
-            "page": "number? (default 1)",
-            "limit": "number? (default 20)"
+            "period": "string? (1m|3m|6m|1y|all, default 1y) - ignored if fromDate/toDate provided",
+            "action": "string? (MUA|BAN) - filter by buy or sell",
+            "fromDate": "string? (YYYY-MM-DD) - custom start date, overrides period",
+            "toDate": "string? (YYYY-MM-DD) - custom end date, overrides period",
+            "minPrice": "number? (min 0) - filter by minimum unit price",
+            "maxPrice": "number? (min 0) - filter by maximum unit price",
+            "page": "number? (default 1, min 1)",
+            "limit": "number? (default 20, positive integer)"
           },
-          "requestExample": "/api/assets/SJC/transactions?period=1y&page=1&limit=10",
+          "requestExamples": [
+            "/api/assets/SJC/transactions?period=1y&page=1&limit=10",
+            "/api/assets/BTC/transactions?action=MUA",
+            "/api/assets/BTC/transactions?fromDate=2025-01-01&toDate=2025-12-31",
+            "/api/assets/SJC/transactions?minPrice=80000000&maxPrice=95000000"
+          ],
           "response": {
             "data": [
               {

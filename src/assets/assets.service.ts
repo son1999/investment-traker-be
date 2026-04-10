@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { I18nService } from '../i18n/i18n.service.js';
 import { CreateAssetDto } from './dto/create-asset.dto.js';
 import { UpdateAssetDto } from './dto/update-asset.dto.js';
+import { QueryAssetTransactionsDto } from './dto/query-asset-transactions.dto.js';
 import { getPeriodStartDate, toDateStr } from '../common/helpers/period.helper.js';
 
 @Injectable()
@@ -137,6 +138,7 @@ export class AssetsService {
     const assetType = asset?.type || transactions[0].assetType;
     const icon = asset?.icon || priceData?.icon || transactions[0].icon;
     const iconBg = asset?.iconBg || transactions[0].iconBg;
+    const currency = asset?.currency || transactions[0]?.currency || 'VND';
 
     const buyLots: { qty: number; price: number }[] = [];
     let totalBuyQty = 0;
@@ -193,19 +195,28 @@ export class AssetsService {
     const profitPercent = remainingCost > 0 ? Math.round((unrealizedTotal / remainingCost) * 10000) / 100 : 0;
 
     let runningQty = 0;
+    let lastKnownPrice = 0;
     const valueHistory: { date: string; value: number }[] = [];
     transactions.forEach((t) => {
       if (t.action === 'MUA') runningQty += t.quantity;
       else runningQty -= t.quantity;
+      lastKnownPrice = t.unitPrice;
       valueHistory.push({
         date: toDateStr(t.date),
-        value: Math.round(runningQty * currentPrice),
+        value: Math.round(runningQty * lastKnownPrice),
       });
     });
+
+    const today = toDateStr(new Date());
+    const lastEntry = valueHistory[valueHistory.length - 1];
+    if (currentPrice > 0 && lastEntry && lastEntry.date !== today && netQty > 0) {
+      valueHistory.push({ date: today, value: Math.round(netQty * currentPrice) });
+    }
 
     return {
       assetCode: code,
       assetType,
+      currency,
       icon,
       iconBg,
       metrics: {
@@ -216,11 +227,11 @@ export class AssetsService {
         },
         avgCost: {
           value: avgCost,
-          currency: 'VND',
+          currency,
         },
         currentPrice: {
           value: currentPrice,
-          currency: 'VND',
+          currency,
           updatedAt: priceData?.updatedAt || null,
         },
         profit: {
@@ -245,14 +256,28 @@ export class AssetsService {
   async getAssetTransactions(
     userId: string,
     code: string,
-    period: string = '1y',
-    page: number = 1,
-    limit: number = 20,
+    query: QueryAssetTransactionsDto,
   ) {
-    const startDate = getPeriodStartDate(period);
+    const { period = '1y', action, fromDate, toDate, minPrice, maxPrice, page = 1, limit = 20 } = query;
 
     const where: any = { userId, assetCode: code };
-    if (startDate) where.date = { gte: startDate };
+
+    if (fromDate || toDate) {
+      where.date = {};
+      if (fromDate) where.date.gte = new Date(fromDate);
+      if (toDate) where.date.lte = new Date(toDate);
+    } else {
+      const startDate = getPeriodStartDate(period);
+      if (startDate) where.date = { gte: startDate };
+    }
+
+    if (action) where.action = action;
+
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      where.unitPrice = {};
+      if (minPrice !== undefined) where.unitPrice.gte = minPrice;
+      if (maxPrice !== undefined) where.unitPrice.lte = maxPrice;
+    }
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.transaction.findMany({

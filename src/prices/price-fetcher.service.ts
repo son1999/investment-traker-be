@@ -23,12 +23,13 @@ export class PriceFetcherService {
     private gold: GoldProvider,
   ) {}
 
-  async getCryptoPrice(code: string): Promise<number | null> {
-    const cacheKey = `crypto:${code}`;
+  async getCryptoPrice(code: string, currency: string = 'VND'): Promise<number | null> {
+    const cgCurrency = currency.toLowerCase() === 'usdt' ? 'usd' : currency.toLowerCase();
+    const cacheKey = `crypto:${code}:${cgCurrency}`;
     const cached = await this.cacheManager.get<number>(cacheKey);
     if (cached !== undefined && cached !== null) return cached;
 
-    const price = await this.coinGecko.fetchPrice(code, 'vnd');
+    const price = await this.coinGecko.fetchPrice(code, cgCurrency);
     if (price !== null) {
       await this.cacheManager.set(cacheKey, price, CRYPTO_CACHE_TTL);
     }
@@ -60,10 +61,10 @@ export class PriceFetcherService {
     return price;
   }
 
-  async getLivePrice(code: string, type: string): Promise<number | null> {
+  async getLivePrice(code: string, type: string, currency: string = 'VND'): Promise<number | null> {
     switch (type) {
       case 'crypto':
-        return this.getCryptoPrice(code);
+        return this.getCryptoPrice(code, currency);
       case 'stock':
         return this.getStockPrice(code);
       case 'metal':
@@ -79,7 +80,7 @@ export class PriceFetcherService {
       select: { code: true, type: true, icon: true, currency: true },
     });
 
-    const updates: { code: string; price: number; icon: string; type: string }[] = [];
+    const updates: { code: string; price: number; icon: string; type: string; currency: string }[] = [];
 
     // Batch crypto prices via CoinGecko
     const cryptoAssets = assets.filter((a) => a.type === 'crypto');
@@ -107,8 +108,8 @@ export class PriceFetcherService {
           const price = prices[coinId]?.[currency];
           if (price !== undefined) {
             const asset = cryptoAssets.find((a) => a.code === assetCode)!;
-            updates.push({ code: assetCode, price, icon: asset.icon, type: 'crypto' });
-            await this.cacheManager.set(`crypto:${assetCode}`, price, CRYPTO_CACHE_TTL);
+            updates.push({ code: assetCode, price, icon: asset.icon, type: 'crypto', currency: asset.currency || 'VND' });
+            await this.cacheManager.set(`crypto:${assetCode}:${currency}`, price, CRYPTO_CACHE_TTL);
           }
         }
       }
@@ -123,7 +124,7 @@ export class PriceFetcherService {
       for (const asset of stockAssets) {
         const price = allStockPrices.get(asset.code.toUpperCase());
         if (price !== undefined) {
-          updates.push({ code: asset.code, price, icon: asset.icon, type: 'stock' });
+          updates.push({ code: asset.code, price, icon: asset.icon, type: 'stock', currency: 'VND' });
           await this.cacheManager.set(`stock:${asset.code}`, price, ttl);
         }
       }
@@ -136,7 +137,7 @@ export class PriceFetcherService {
       for (const asset of metalAssets) {
         const goldPrice = allGoldPrices.get(asset.code.toUpperCase());
         if (goldPrice) {
-          updates.push({ code: asset.code, price: goldPrice.sell, icon: asset.icon, type: 'metal' });
+          updates.push({ code: asset.code, price: goldPrice.sell, icon: asset.icon, type: 'metal', currency: 'VND' });
           await this.cacheManager.set(`gold:${asset.code}`, goldPrice.sell, CRYPTO_CACHE_TTL);
         }
       }
@@ -180,13 +181,14 @@ export class PriceFetcherService {
       for (const update of updates) {
         await this.prisma.price.upsert({
           where: { userId_code: { userId, code: update.code } },
-          update: { price: update.price },
+          update: { price: update.price, currency: update.currency },
           create: {
             userId,
             code: update.code,
             icon: update.icon,
             type: update.type,
             price: update.price,
+            currency: update.currency,
           },
         });
       }

@@ -5,6 +5,7 @@ import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator
 import { AssetsService } from './assets.service.js';
 import { CreateAssetDto } from './dto/create-asset.dto.js';
 import { UpdateAssetDto } from './dto/update-asset.dto.js';
+import { QueryAssetTransactionsDto } from './dto/query-asset-transactions.dto.js';
 
 @ApiTags('Assets')
 @ApiBearerAuth()
@@ -68,24 +69,13 @@ export class AssetsController {
   }
 
   @Get(':code/transactions')
-  @ApiOperation({ summary: 'Get transactions for a specific asset with pagination' })
+  @ApiOperation({ summary: 'Get transactions for a specific asset with pagination and filters' })
   @ApiParam({ name: 'code', description: 'Asset code', example: 'SJC' })
-  @ApiQuery({ name: 'period', required: false, enum: ['1m', '3m', '6m', '1y', 'all'] })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   async getAssetTransactions(
     @CurrentUser() user: AuthUser,
     @Param('code') code: string,
-    @Query('period') period?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query() query: QueryAssetTransactionsDto,
   ) {
-    return this.assetsService.getAssetTransactions(
-      user.id,
-      code,
-      period || '1y',
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 20,
-    );
+    return this.assetsService.getAssetTransactions(user.id, code, query);
   }
 }

@@ -16,6 +16,9 @@ export class PriceResponseDto {
   @ApiProperty({ example: 92500000 })
   price: number;
 
+  @ApiProperty({ example: 'VND', description: 'Currency the price is denominated in' })
+  currency: string;
+
   @ApiProperty({ example: '2025-01-15T10:30:00.000Z' })
   updatedAt: string;
 }

@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsString, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ASSET_TYPES } from '../../common/constants/asset-types.js';
 
 export class CreatePriceDto {
@@ -19,4 +19,9 @@ export class CreatePriceDto {
   @IsNumber()
   @Min(0)
   price: number;
+
+  @ApiPropertyOptional({ example: 'VND', description: 'Currency the price is denominated in (default: VND)' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
 }

@@ -65,6 +65,7 @@ model Price {
   icon      String
   type      String
   price     Float
+  currency  String   @default("VND") // currency the price is denominated in
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

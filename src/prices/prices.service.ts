@@ -11,6 +11,14 @@ export class PricesService {
     private i18n: I18nService,
   ) {}
 
+  async getAssetCurrency(userId: string, code: string): Promise<string | null> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code } },
+      select: { currency: true },
+    });
+    return asset?.currency || null;
+  }
+
   async findAll(userId: string, type?: string) {
     const where: any = { userId };
     if (type) where.type = type;
@@ -30,6 +38,7 @@ export class PricesService {
           icon: dto.icon,
           type: dto.type,
           price: dto.price,
+          ...(dto.currency && { currency: dto.currency }),
         },
       });
       return { data: updated, status: 200 };
@@ -42,6 +51,7 @@ export class PricesService {
         icon: dto.icon,
         type: dto.type,
         price: dto.price,
+        currency: dto.currency || 'VND',
       },
     });
     return { data: created, status: 201 };

@@ -98,6 +98,9 @@ export class AssetDetailResponseDto {
   @ApiProperty({ enum: ['metal', 'crypto', 'stock', 'savings'], example: 'metal' })
   assetType: string;
 
+  @ApiProperty({ example: 'VND', description: 'Currency of the asset' })
+  currency: string;
+
   @ApiProperty({ example: '🥇' })
   icon: string;
 

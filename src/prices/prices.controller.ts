@@ -74,7 +74,10 @@ export class PricesController {
     @Param('code') code: string,
     @Query('type') type: string,
   ) {
-    const price = await this.priceFetcherService.getLivePrice(code, type);
-    return { code, type, price };
+    // Lookup asset currency for accurate price fetching
+    const asset = await this.pricesService.getAssetCurrency(user.id, code);
+    const currency = asset || 'VND';
+    const price = await this.priceFetcherService.getLivePrice(code, type, currency);
+    return { code, type, price, currency };
   }
 }
