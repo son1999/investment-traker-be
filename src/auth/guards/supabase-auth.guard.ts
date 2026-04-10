@@ -1,13 +1,19 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../supabase/supabase.service.js';
 import { I18nService } from '../../i18n/i18n.service.js';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
+  private guestEmail: string;
+
   constructor(
     private supabaseService: SupabaseService,
     private i18n: I18nService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.guestEmail = this.configService.get<string>('GUEST_EMAIL', '');
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -28,6 +34,7 @@ export class SupabaseAuthGuard implements CanActivate {
       id: data.user.id,
       email: data.user.email,
       token,
+      isGuest: !!this.guestEmail && data.user.email === this.guestEmail,
     };
 
     return true;

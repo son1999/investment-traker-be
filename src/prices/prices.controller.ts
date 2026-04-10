@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { AllowGuestWrite } from '../auth/decorators/allow-guest-write.decorator.js';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard.js';
@@ -58,6 +59,7 @@ export class PricesController {
   }
 
   @Post('refresh')
+  @AllowGuestWrite()
   @ApiOperation({ summary: 'Refresh all asset prices from external APIs (CoinGecko, VnStock)' })
   @ApiResponse({ status: 200, description: 'Refresh result with updated prices' })
   async refreshPrices(@CurrentUser() user: AuthUser) {

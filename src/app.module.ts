@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { SupabaseModule } from './supabase/supabase.module.js';
@@ -14,6 +14,7 @@ import { CurrenciesModule } from './currencies/currencies.module.js';
 import { GoalsModule } from './goals/goals.module.js';
 import { I18nModule } from './i18n/i18n.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
+import { GuestWriteGuard } from './auth/guards/guest-write.guard.js';
 
 @Module({
   imports: [
@@ -35,6 +36,10 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: GuestWriteGuard,
     },
   ],
 })

@@ -2,6 +2,7 @@ export const vi = {
   // Auth
   INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng',
   INVALID_REFRESH_TOKEN: 'Refresh token không hợp lệ hoặc đã hết hạn',
+  GUEST_READ_ONLY: 'Tài khoản khách chỉ được xem. Không thể thêm, sửa hoặc xóa dữ liệu.',
   MISSING_AUTH_HEADER: 'Thiếu hoặc sai header xác thực',
   INVALID_TOKEN: 'Token không hợp lệ hoặc đã hết hạn',
 
