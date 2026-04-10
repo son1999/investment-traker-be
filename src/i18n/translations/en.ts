@@ -1,6 +1,7 @@
 export const en = {
   // Auth
   INVALID_CREDENTIALS: 'Invalid email or password',
+  INVALID_REFRESH_TOKEN: 'Invalid or expired refresh token',
   MISSING_AUTH_HEADER: 'Missing or invalid authorization header',
   INVALID_TOKEN: 'Invalid or expired token',
 

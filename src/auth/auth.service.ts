@@ -32,6 +32,25 @@ export class AuthService {
     };
   }
 
+  async refresh(refreshToken: string) {
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .auth.refreshSession({ refresh_token: refreshToken });
+
+    if (error || !data.session) {
+      throw new UnauthorizedException(this.i18n.t('INVALID_REFRESH_TOKEN'));
+    }
+
+    return {
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      user: {
+        id: data.user!.id,
+        email: data.user!.email,
+      },
+    };
+  }
+
   async logout(token: string) {
     const client = this.supabaseService.getClientWithToken(token);
     await client.auth.signOut();

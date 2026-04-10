@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
-import { getPeriodStartDate, toDateStr, getMonthKey } from '../common/helpers/period.helper.js';
+import { getPeriodStartDate, toDateStr, getMonthKey, roundByCurrency } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class ReportsService {
@@ -338,7 +338,7 @@ export class ReportsService {
   }
 
   async getDcaChart(userId: string, code: string) {
-    const [buyTxs, priceData] = await this.prisma.$transaction([
+    const [buyTxs, priceData, asset] = await this.prisma.$transaction([
       this.prisma.transaction.findMany({
         where: { userId, assetCode: code, action: 'MUA' },
         orderBy: { date: 'asc' },
@@ -347,8 +347,14 @@ export class ReportsService {
         where: { userId, code },
         take: 1,
       }),
+      this.prisma.asset.findUnique({
+        where: { userId_code: { userId, code } },
+        select: { currency: true },
+      }),
     ]);
 
+    const cur = asset?.currency || buyTxs[0]?.currency || 'VND';
+    const r = (v: number) => roundByCurrency(v, cur);
     const currentPrice = priceData.length > 0 ? priceData[0].price : 0;
 
     if (buyTxs.length === 0) {
@@ -374,8 +380,8 @@ export class ReportsService {
       const price = t.unitPrice;
       runningQty += qty;
       runningCost += qty * price;
-      purchaseAmounts.push(Math.round(qty * price));
-      avgCostPrices.push(Math.round(runningCost / runningQty));
+      purchaseAmounts.push(r(qty * price));
+      avgCostPrices.push(r(runningCost / runningQty));
 
       if (i > 0) {
         const prev = buyTxs[i - 1].date.getTime();
@@ -390,7 +396,7 @@ export class ReportsService {
       assetCode: code,
       numPurchases: buyTxs.length,
       avgIntervalDays: buyTxs.length > 1 ? Math.round(totalInterval / (buyTxs.length - 1)) : 0,
-      avgPerPurchase: Math.round(totalPurchaseAmount / buyTxs.length),
+      avgPerPurchase: r(totalPurchaseAmount / buyTxs.length),
       purchaseAmounts,
       avgCostPrices,
       currentPrice,
@@ -398,22 +404,30 @@ export class ReportsService {
   }
 
   async getDcaHistory(userId: string, code: string) {
-    const buyTxs = await this.prisma.transaction.findMany({
-      where: { userId, assetCode: code, action: 'MUA' },
-      orderBy: { date: 'asc' },
-    });
+    const [buyTxs, asset] = await this.prisma.$transaction([
+      this.prisma.transaction.findMany({
+        where: { userId, assetCode: code, action: 'MUA' },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.asset.findUnique({
+        where: { userId_code: { userId, code } },
+        select: { currency: true },
+      }),
+    ]);
+
+    const cur = asset?.currency || buyTxs[0]?.currency || 'VND';
 
     return buyTxs.map((t, i) => ({
       number: i + 1,
       date: toDateStr(t.date),
-      unitPrice: t.unitPrice,
+      unitPrice: roundByCurrency(t.unitPrice, cur),
       quantity: t.quantity,
-      total: Math.round(t.quantity * t.unitPrice),
+      total: roundByCurrency(t.quantity * t.unitPrice, cur),
     }));
   }
 
   async getDcaComparison(userId: string, code: string) {
-    const [buyTxs, priceData] = await this.prisma.$transaction([
+    const [buyTxs, priceData, asset] = await this.prisma.$transaction([
       this.prisma.transaction.findMany({
         where: { userId, assetCode: code, action: 'MUA' },
         orderBy: { date: 'asc' },
@@ -422,8 +436,14 @@ export class ReportsService {
         where: { userId, code },
         take: 1,
       }),
+      this.prisma.asset.findUnique({
+        where: { userId_code: { userId, code } },
+        select: { currency: true },
+      }),
     ]);
 
+    const cur = asset?.currency || buyTxs[0]?.currency || 'VND';
+    const r = (v: number) => roundByCurrency(v, cur);
     const currentPrice = priceData.length > 0 ? priceData[0].price : 0;
 
     if (buyTxs.length === 0) {
@@ -439,28 +459,29 @@ export class ReportsService {
       totalQty += t.quantity;
       totalCost += t.quantity * t.unitPrice;
     });
-    const avgCost = totalQty > 0 ? Math.round(totalCost / totalQty) : 0;
-    const dcaCurrentValue = Math.round(totalQty * currentPrice);
-    const dcaProfit = dcaCurrentValue - Math.round(totalCost);
-    const dcaProfitPercent = totalCost > 0 ? Math.round((dcaProfit / totalCost) * 10000) / 100 : 0;
+    const avgCost = totalQty > 0 ? r(totalCost / totalQty) : 0;
+    const dcaCurrentValue = r(totalQty * currentPrice);
+    const dcaTotalCost = r(totalCost);
+    const dcaProfit = r(dcaCurrentValue - dcaTotalCost);
+    const dcaProfitPercent = totalCost > 0 ? Math.round((dcaProfit / dcaTotalCost) * 10000) / 100 : 0;
 
     const priceAtFirstBuy = buyTxs[0].unitPrice;
     const lumpSumQty = priceAtFirstBuy > 0 ? totalCost / priceAtFirstBuy : 0;
-    const lumpSumCurrentValue = Math.round(lumpSumQty * currentPrice);
-    const lumpSumProfit = lumpSumCurrentValue - Math.round(totalCost);
-    const lumpSumProfitPercent = totalCost > 0 ? Math.round((lumpSumProfit / totalCost) * 10000) / 100 : 0;
+    const lumpSumCurrentValue = r(lumpSumQty * currentPrice);
+    const lumpSumProfit = r(lumpSumCurrentValue - dcaTotalCost);
+    const lumpSumProfitPercent = totalCost > 0 ? Math.round((lumpSumProfit / dcaTotalCost) * 10000) / 100 : 0;
 
     return {
       dca: {
         avgCost,
-        totalCapital: Math.round(totalCost),
+        totalCapital: dcaTotalCost,
         currentValue: dcaCurrentValue,
         profit: dcaProfit,
         profitPercent: dcaProfitPercent,
       },
       lumpSum: {
         priceAtFirstBuy,
-        totalCapital: Math.round(totalCost),
+        totalCapital: dcaTotalCost,
         currentValue: lumpSumCurrentValue,
         profit: lumpSumProfit,
         profitPercent: lumpSumProfitPercent,

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
-import { getPeriodStartDate, toDateStr, getMonthKey } from '../common/helpers/period.helper.js';
+import { getPeriodStartDate, toDateStr, getMonthKey, roundByCurrency } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class PortfolioService {
@@ -169,8 +169,8 @@ export class PortfolioService {
         icon: priceInfo?.icon || a.icon,
         iconBg: a.iconBg,
         quantity: a.netQty,
-        averageCost: Math.round(avgCost),
-        currentPrice: Math.round(currentPrice),
+        averageCost: roundByCurrency(avgCost, currency),
+        currentPrice: roundByCurrency(currentPrice, currency),
         currency,
         value: Math.round(valueVnd),
         profitLossPercent,

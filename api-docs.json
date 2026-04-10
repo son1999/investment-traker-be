@@ -101,6 +101,35 @@
         },
         {
           "method": "POST",
+          "path": "/api/auth/refresh",
+          "description": "Refresh access token using refresh token. Use this when the access token expires (default 1 hour). No Bearer token required.",
+          "auth": false,
+          "requestBody": {
+            "refreshToken": "string (required, refresh token from login response)"
+          },
+          "requestExample": {
+            "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
+          },
+          "response": {
+            "data": {
+              "accessToken": "string (new JWT access token)",
+              "refreshToken": "string (new refresh token - rotate it!)",
+              "user": {
+                "id": "string (UUID)",
+                "email": "string"
+              }
+            }
+          },
+          "errors": {
+            "401": {
+              "en": "Invalid or expired refresh token",
+              "vi": "Refresh token không hợp lệ hoặc đã hết hạn"
+            }
+          },
+          "notes": "FE should call this endpoint when receiving 401 on any API call. Store the new refreshToken - Supabase rotates it on each refresh."
+        },
+        {
+          "method": "POST",
           "path": "/api/auth/logout",
           "description": "Logout current user",
           "auth": true,
