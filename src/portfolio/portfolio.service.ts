@@ -216,15 +216,29 @@ export class PortfolioService {
 
   async getProfitByAsset(userId: string) {
     const holdings = await this.getHoldings(userId);
+    const assetCurrencyMap = await this.getAssetCurrencyMap(userId);
+    const rateMap = await this.currenciesService.getRateMap(userId);
     return holdings
-      .map((h) => ({
-        symbol: h.assetCode,
-        cost: Math.round(h.averageCost * h.quantity),
-        value: h.value,
-        profit: h.profitLossAmount,
-        profitPercent: h.profitLossPercent,
-        positive: h.positive,
-      }))
+      .map((h) => {
+        const currency = h.currency || 'VND';
+        const rate = this.getRate(h.assetCode, assetCurrencyMap, rateMap);
+        const costNative = roundByCurrency(h.averageCost * h.quantity, currency);
+        const valueNative = roundByCurrency(
+          h.value / (rate || 1),
+          currency,
+        );
+        return {
+          symbol: h.assetCode,
+          currency,
+          costNative,
+          valueNative,
+          cost: Math.round(costNative * rate),
+          value: h.value,
+          profit: h.profitLossAmount,
+          profitPercent: h.profitLossPercent,
+          positive: h.positive,
+        };
+      })
       .sort((a, b) => b.profitPercent - a.profitPercent);
   }
 

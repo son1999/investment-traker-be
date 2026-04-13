@@ -79,19 +79,28 @@ export class ProfitByAssetResponseDto {
   @ApiProperty({ example: 'SJC' })
   symbol: string;
 
-  @ApiProperty({ example: 5000000 })
+  @ApiProperty({ example: 'VND' })
+  currency: string;
+
+  @ApiProperty({ example: 1145 })
+  costNative: number;
+
+  @ApiProperty({ example: 980 })
+  valueNative: number;
+
+  @ApiProperty({ example: 27600000 })
   cost: number;
 
-  @ApiProperty({ example: 5200000 })
+  @ApiProperty({ example: 22791167 })
   value: number;
 
-  @ApiProperty({ example: 200000 })
+  @ApiProperty({ example: -4808833 })
   profit: number;
 
-  @ApiProperty({ example: 12.12 })
+  @ApiProperty({ example: -17.42 })
   profitPercent: number;
 
-  @ApiProperty({ example: true })
+  @ApiProperty({ example: false })
   positive: boolean;
 }
 
