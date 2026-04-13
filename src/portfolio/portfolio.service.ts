@@ -219,6 +219,9 @@ export class PortfolioService {
     return holdings
       .map((h) => ({
         symbol: h.assetCode,
+        cost: Math.round(h.averageCost * h.quantity),
+        value: h.value,
+        profit: h.profitLossAmount,
         profitPercent: h.profitLossPercent,
         positive: h.positive,
       }))

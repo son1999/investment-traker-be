@@ -79,6 +79,15 @@ export class ProfitByAssetResponseDto {
   @ApiProperty({ example: 'SJC' })
   symbol: string;
 
+  @ApiProperty({ example: 5000000 })
+  cost: number;
+
+  @ApiProperty({ example: 5200000 })
+  value: number;
+
+  @ApiProperty({ example: 200000 })
+  profit: number;
+
   @ApiProperty({ example: 12.12 })
   profitPercent: number;
 
