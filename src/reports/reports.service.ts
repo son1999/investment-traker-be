@@ -369,12 +369,16 @@ export class ReportsService {
         avgIntervalDays: 0,
         avgPerPurchase: 0,
         purchaseAmounts: [],
+        purchaseDates: [],
+        purchaseUnitPrices: [],
         avgCostPrices: [],
         currentPrice,
       };
     }
 
     const purchaseAmounts: number[] = [];
+    const purchaseDates: string[] = [];
+    const purchaseUnitPrices: number[] = [];
     const avgCostPrices: number[] = [];
     let runningQty = 0;
     let runningCost = 0;
@@ -386,6 +390,8 @@ export class ReportsService {
       runningQty += qty;
       runningCost += qty * price;
       purchaseAmounts.push(r(qty * price));
+      purchaseDates.push(toDateStr(t.date));
+      purchaseUnitPrices.push(r(price));
       avgCostPrices.push(r(runningCost / runningQty));
 
       if (i > 0) {
@@ -404,6 +410,8 @@ export class ReportsService {
       avgIntervalDays: buyTxs.length > 1 ? Math.round(totalInterval / (buyTxs.length - 1)) : 0,
       avgPerPurchase: r(totalPurchaseAmount / buyTxs.length),
       purchaseAmounts,
+      purchaseDates,
+      purchaseUnitPrices,
       avgCostPrices,
       currentPrice,
     };
