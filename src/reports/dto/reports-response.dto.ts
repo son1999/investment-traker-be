@@ -171,6 +171,9 @@ class LumpSumResultDto {
 }
 
 export class DcaComparisonResponseDto {
+  @ApiProperty({ example: 'USDT' })
+  currency: string;
+
   @ApiProperty({ type: DcaResultDto })
   dca: DcaResultDto;
 

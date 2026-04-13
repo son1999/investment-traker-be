@@ -462,6 +462,7 @@ export class ReportsService {
 
     if (buyTxs.length === 0) {
       return {
+        currency: cur,
         dca: { avgCost: 0, totalCapital: 0, currentValue: 0, profit: 0, profitPercent: 0 },
         lumpSum: { priceAtFirstBuy: 0, totalCapital: 0, currentValue: 0, profit: 0, profitPercent: 0 },
       };
@@ -486,6 +487,7 @@ export class ReportsService {
     const lumpSumProfitPercent = totalCost > 0 ? Math.round((lumpSumProfit / dcaTotalCost) * 10000) / 100 : 0;
 
     return {
+      currency: cur,
       dca: {
         avgCost,
         totalCapital: dcaTotalCost,
