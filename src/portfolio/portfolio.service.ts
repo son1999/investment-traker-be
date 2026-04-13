@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
-import { getPeriodStartDate, toDateStr, getMonthKey, roundByCurrency } from '../common/helpers/period.helper.js';
+import { getPeriodStartDate, toDateStr, roundByCurrency } from '../common/helpers/period.helper.js';
 
 @Injectable()
 export class PortfolioService {
@@ -228,12 +228,9 @@ export class PortfolioService {
   async getHistory(userId: string, period: string = '6m') {
     const startDate = getPeriodStartDate(period);
 
-    const where: any = { userId };
-    if (startDate) where.date = { gte: startDate };
-
     const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
       this.prisma.transaction.findMany({
-        where,
+        where: { userId },
         orderBy: { date: 'asc' },
       }),
       this.prisma.price.findMany({ where: { userId } }),
@@ -248,45 +245,102 @@ export class PortfolioService {
       return { period, points: [] };
     }
 
-    const months = new Set<string>();
-    transactions.forEach((t) => {
-      months.add(getMonthKey(t.date) + '-01');
-    });
-    const today = toDateStr(new Date());
-    months.add(today);
+    const firstTxDate = transactions[0].date;
+    const today = new Date();
+    const windowStart = startDate && startDate > firstTxDate ? startDate : firstTxDate;
 
-    const sortedMonths = Array.from(months).sort();
-    const points: { date: string; value: number }[] = [];
+    const pointDates: Date[] = [];
+    const cursor = new Date(
+      windowStart.getFullYear(),
+      windowStart.getMonth(),
+      1,
+    );
+    while (cursor <= today) {
+      pointDates.push(new Date(cursor));
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    const todayStr = toDateStr(today);
+    if (
+      pointDates.length === 0 ||
+      toDateStr(pointDates[pointDates.length - 1]) !== todayStr
+    ) {
+      pointDates.push(today);
+    }
 
-    const runningHoldings = new Map<string, { qty: number }>();
+    const runningHoldings = new Map<string, { qty: number; cost: number }>();
     let txIndex = 0;
+    const points: {
+      date: string;
+      value: number;
+      cost: number;
+      profit: number;
+      profitPercentage: number;
+    }[] = [];
 
-    for (const monthDate of sortedMonths) {
-      while (txIndex < transactions.length && toDateStr(transactions[txIndex].date) <= monthDate) {
+    for (const pd of pointDates) {
+      while (
+        txIndex < transactions.length &&
+        transactions[txIndex].date <= pd
+      ) {
         const t = transactions[txIndex];
         const code = t.assetCode;
         if (!runningHoldings.has(code)) {
-          runningHoldings.set(code, { qty: 0 });
+          runningHoldings.set(code, { qty: 0, cost: 0 });
         }
         const h = runningHoldings.get(code)!;
         if (t.action === 'MUA') {
           h.qty += t.quantity;
+          h.cost += t.quantity * t.unitPrice;
         } else {
+          const avgCost = h.qty > 0 ? h.cost / h.qty : 0;
+          h.cost -= t.quantity * avgCost;
           h.qty -= t.quantity;
+          if (h.qty <= 0) {
+            h.qty = 0;
+            h.cost = 0;
+          }
         }
         txIndex++;
       }
 
       let totalValue = 0;
+      let totalCost = 0;
+      const debugBreakdown: any[] = [];
       runningHoldings.forEach((h, code) => {
         if (h.qty > 0) {
           const price = priceMap.get(code) || 0;
           const rate = this.getRate(code, assetCurrencyMap, rateMap);
-          totalValue += h.qty * price * rate;
+          const v = h.qty * price * rate;
+          const c = h.cost * rate;
+          totalValue += v;
+          totalCost += c;
+          debugBreakdown.push({
+            code,
+            qty: h.qty,
+            rawCost: h.cost,
+            currentPrice: price,
+            rate,
+            value: Math.round(v),
+            cost: Math.round(c),
+          });
         }
       });
+      console.log(
+        `[getHistory] ${toDateStr(pd)} → value=${Math.round(totalValue)} cost=${Math.round(totalCost)}`,
+        debugBreakdown,
+      );
 
-      points.push({ date: monthDate, value: Math.round(totalValue) });
+      const profit = totalValue - totalCost;
+      const profitPercentage =
+        totalCost > 0 ? Math.round((profit / totalCost) * 10000) / 100 : 0;
+
+      points.push({
+        date: toDateStr(pd),
+        value: Math.round(totalValue),
+        cost: Math.round(totalCost),
+        profit: Math.round(profit),
+        profitPercentage,
+      });
     }
 
     return { period, points };

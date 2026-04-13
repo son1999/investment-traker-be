@@ -92,6 +92,15 @@ export class HistoryPointDto {
 
   @ApiProperty({ example: 450000000 })
   value: number;
+
+  @ApiProperty({ example: 400000000 })
+  cost: number;
+
+  @ApiProperty({ example: 50000000 })
+  profit: number;
+
+  @ApiProperty({ example: 12.5 })
+  profitPercentage: number;
 }
 
 export class PortfolioHistoryResponseDto {
