@@ -229,6 +229,9 @@ export class PortfolioService {
         );
         return {
           symbol: h.assetCode,
+          assetType: h.assetType,
+          icon: h.icon,
+          iconBg: h.iconBg,
           currency,
           costNative,
           valueNative,

@@ -79,6 +79,15 @@ export class ProfitByAssetResponseDto {
   @ApiProperty({ example: 'SJC' })
   symbol: string;
 
+  @ApiProperty({ example: 'metal' })
+  assetType: string;
+
+  @ApiProperty({ example: '🥇' })
+  icon: string;
+
+  @ApiProperty({ example: '#FEF3C7' })
+  iconBg: string;
+
   @ApiProperty({ example: 'VND' })
   currency: string;
 
