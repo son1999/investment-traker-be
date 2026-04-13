@@ -341,7 +341,7 @@ export class ReportsService {
   }
 
   async getDcaChart(userId: string, code: string) {
-    const [buyTxs, priceData, asset] = await this.prisma.$transaction([
+    const [buyTxs, priceData, assetCurrencyMap] = await Promise.all([
       this.prisma.transaction.findMany({
         where: { userId, assetCode: code, action: 'MUA' },
         orderBy: { date: 'asc' },
@@ -350,19 +350,21 @@ export class ReportsService {
         where: { userId, code },
         take: 1,
       }),
-      this.prisma.asset.findUnique({
-        where: { userId_code: { userId, code } },
-        select: { currency: true },
-      }),
+      this.getAssetCurrencyMap(userId),
     ]);
 
-    const cur = asset?.currency || buyTxs[0]?.currency || 'VND';
+    const cur =
+      assetCurrencyMap.get(code) ||
+      priceData[0]?.currency ||
+      buyTxs[0]?.currency ||
+      'VND';
     const r = (v: number) => roundByCurrency(v, cur);
     const currentPrice = priceData.length > 0 ? priceData[0].price : 0;
 
     if (buyTxs.length === 0) {
       return {
         assetCode: code,
+        currency: cur,
         numPurchases: 0,
         avgIntervalDays: 0,
         avgPerPurchase: 0,
@@ -397,6 +399,7 @@ export class ReportsService {
 
     return {
       assetCode: code,
+      currency: cur,
       numPurchases: buyTxs.length,
       avgIntervalDays: buyTxs.length > 1 ? Math.round(totalInterval / (buyTxs.length - 1)) : 0,
       avgPerPurchase: r(totalPurchaseAmount / buyTxs.length),
