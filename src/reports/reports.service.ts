@@ -224,12 +224,13 @@ export class ReportsService {
       totalBuyCost: number;
       netQty: number;
       icon: string;
+      assetType: string;
     }>();
 
     transactions.forEach((t) => {
       const code = t.assetCode;
       if (!assetMap.has(code)) {
-        assetMap.set(code, { totalBuyQty: 0, totalBuyCost: 0, netQty: 0, icon: t.icon });
+        assetMap.set(code, { totalBuyQty: 0, totalBuyCost: 0, netQty: 0, icon: t.icon, assetType: t.assetType });
       }
       const a = assetMap.get(code)!;
       if (t.action === 'MUA') {
@@ -258,6 +259,7 @@ export class ReportsService {
       totalPortfolioValue += currentValue;
       assets.push({
         assetCode: code,
+        assetType: a.assetType,
         name: code,
         icon: priceInfo?.icon || a.icon,
         invested: Math.round(invested),
@@ -275,6 +277,7 @@ export class ReportsService {
       .map((a, idx) => ({
         rank: idx + 1,
         assetCode: a.assetCode,
+        assetType: a.assetType,
         name: a.name,
         icon: a.icon,
         invested: a.invested,
