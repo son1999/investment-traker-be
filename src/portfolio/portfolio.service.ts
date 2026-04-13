@@ -250,14 +250,16 @@ export class PortfolioService {
     const windowStart = startDate && startDate > firstTxDate ? startDate : firstTxDate;
 
     const pointDates: Date[] = [];
+    // Start from the end of the month preceding windowStart so the first emitted
+    // point is the end-of-month of windowStart itself.
     const cursor = new Date(
       windowStart.getFullYear(),
-      windowStart.getMonth(),
-      1,
+      windowStart.getMonth() + 1,
+      0,
     );
-    while (cursor <= today) {
+    while (cursor < today) {
       pointDates.push(new Date(cursor));
-      cursor.setMonth(cursor.getMonth() + 1);
+      cursor.setMonth(cursor.getMonth() + 2, 0);
     }
     const todayStr = toDateStr(today);
     if (
@@ -305,30 +307,14 @@ export class PortfolioService {
 
       let totalValue = 0;
       let totalCost = 0;
-      const debugBreakdown: any[] = [];
       runningHoldings.forEach((h, code) => {
         if (h.qty > 0) {
           const price = priceMap.get(code) || 0;
           const rate = this.getRate(code, assetCurrencyMap, rateMap);
-          const v = h.qty * price * rate;
-          const c = h.cost * rate;
-          totalValue += v;
-          totalCost += c;
-          debugBreakdown.push({
-            code,
-            qty: h.qty,
-            rawCost: h.cost,
-            currentPrice: price,
-            rate,
-            value: Math.round(v),
-            cost: Math.round(c),
-          });
+          totalValue += h.qty * price * rate;
+          totalCost += h.cost * rate;
         }
       });
-      console.log(
-        `[getHistory] ${toDateStr(pd)} → value=${Math.round(totalValue)} cost=${Math.round(totalCost)}`,
-        debugBreakdown,
-      );
 
       const profit = totalValue - totalCost;
       const profitPercentage =
