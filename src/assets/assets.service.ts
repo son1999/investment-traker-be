@@ -67,6 +67,7 @@ export class AssetsService {
           termMonths: dto.termMonths,
           bankName: dto.bankName || null,
           maturityDate: dto.maturityDate ? new Date(dto.maturityDate) : null,
+          principalAmount: dto.principalAmount,
         }),
       },
     });
@@ -91,6 +92,7 @@ export class AssetsService {
         ...(dto.termMonths !== undefined && { termMonths: dto.termMonths }),
         ...(dto.bankName !== undefined && { bankName: dto.bankName }),
         ...(dto.maturityDate !== undefined && { maturityDate: new Date(dto.maturityDate) }),
+        ...(dto.principalAmount !== undefined && { principalAmount: dto.principalAmount }),
       },
     });
   }

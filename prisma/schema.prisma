@@ -29,12 +29,13 @@ model Asset {
   currency     String    @default("VND") // currency code (VND, USDT, USD...)
   icon         String
   iconBg       String    @map("icon_bg")
-  interestRate Float?    @map("interest_rate") // annual interest rate (%) - savings only
-  termMonths   Int?      @map("term_months") // savings term in months - savings only
-  bankName     String?   @map("bank_name") // bank name - savings only
-  maturityDate DateTime? @map("maturity_date") @db.Date // maturity date - savings only
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  interestRate    Float?    @map("interest_rate") // annual interest rate (%) - savings only
+  termMonths      Int?      @map("term_months") // savings term in months - savings only
+  bankName        String?   @map("bank_name") // bank name - savings only
+  maturityDate    DateTime? @map("maturity_date") @db.Date // maturity date - savings only
+  principalAmount Float?    @map("principal_amount") // initial deposit amount - savings only
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([userId, code])
   @@map("assets")

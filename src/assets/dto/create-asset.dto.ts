@@ -52,4 +52,10 @@ export class CreateAssetDto {
   @IsOptional()
   @IsString()
   maturityDate?: string;
+
+  @ApiPropertyOptional({ example: 10000000, description: 'Initial deposit amount - required for savings' })
+  @ValidateIf((o) => o.type === 'savings')
+  @IsNumber()
+  @IsPositive()
+  principalAmount?: number;
 }

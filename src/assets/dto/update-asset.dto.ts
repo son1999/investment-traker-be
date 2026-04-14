@@ -46,4 +46,10 @@ export class UpdateAssetDto {
   @IsOptional()
   @IsString()
   maturityDate?: string;
+
+  @ApiPropertyOptional({ example: 10000000, description: 'Initial deposit amount' })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  principalAmount?: number;
 }
