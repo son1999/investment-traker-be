@@ -32,6 +32,10 @@ export const en = {
   INSUFFICIENT_HOLDINGS: 'Insufficient holdings. Available: {available}, requested: {requested}',
   TRANSACTION_NOT_FOUND: 'Transaction not found',
 
+  // Savings
+  SAVINGS_EVENT_NOT_FOUND: 'Savings event not found',
+  INSUFFICIENT_BALANCE: 'Insufficient balance. Available: {balance}',
+
   // Goals
   GOAL_NOT_FOUND: 'Financial goal not found',
 

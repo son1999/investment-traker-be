@@ -32,6 +32,10 @@ export const vi = {
   INSUFFICIENT_HOLDINGS: 'Không đủ số lượng nắm giữ. Khả dụng: {available}, yêu cầu: {requested}',
   TRANSACTION_NOT_FOUND: 'Không tìm thấy giao dịch',
 
+  // Savings
+  SAVINGS_EVENT_NOT_FOUND: 'Không tìm thấy giao dịch tiết kiệm',
+  INSUFFICIENT_BALANCE: 'Số dư không đủ. Khả dụng: {balance}',
+
   // Goals
   GOAL_NOT_FOUND: 'Không tìm thấy mục tiêu tài chính',
 

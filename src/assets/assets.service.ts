@@ -5,12 +5,14 @@ import { CreateAssetDto } from './dto/create-asset.dto.js';
 import { UpdateAssetDto } from './dto/update-asset.dto.js';
 import { QueryAssetTransactionsDto } from './dto/query-asset-transactions.dto.js';
 import { getPeriodStartDate, toDateStr, roundByCurrency } from '../common/helpers/period.helper.js';
+import { SavingsEventsService } from '../savings-events/savings-events.service.js';
 
 @Injectable()
 export class AssetsService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
+    private savingsEvents: SavingsEventsService,
   ) {}
 
   // ─── CRUD ──────────────────────────────────────────────
@@ -53,7 +55,7 @@ export class AssetsService {
       }
     }
 
-    return this.prisma.asset.create({
+    const asset = await this.prisma.asset.create({
       data: {
         userId,
         code: dto.code,
@@ -71,6 +73,19 @@ export class AssetsService {
         }),
       },
     });
+
+    if (dto.type === 'savings' && dto.principalAmount && dto.principalAmount > 0) {
+      await this.savingsEvents.createInternal(
+        userId,
+        asset.code,
+        'DEPOSIT',
+        dto.principalAmount,
+        new Date(),
+        'Gửi ban đầu',
+      );
+    }
+
+    return asset;
   }
 
   async update(userId: string, code: string, dto: UpdateAssetDto) {
@@ -105,11 +120,17 @@ export class AssetsService {
       throw new NotFoundException(this.i18n.t('ASSET_NOT_FOUND', { code }));
     }
 
-    const txCount = await this.prisma.transaction.count({
-      where: { userId, assetCode: code },
-    });
-    if (txCount > 0) {
-      throw new BadRequestException(this.i18n.t('ASSET_HAS_TRANSACTIONS', { code, count: txCount }));
+    if (existing.type !== 'savings') {
+      const txCount = await this.prisma.transaction.count({
+        where: { userId, assetCode: code },
+      });
+      if (txCount > 0) {
+        throw new BadRequestException(this.i18n.t('ASSET_HAS_TRANSACTIONS', { code, count: txCount }));
+      }
+    } else {
+      await this.prisma.savingsEvent.deleteMany({
+        where: { userId, assetCode: code },
+      });
     }
 
     await this.prisma.asset.delete({ where: { id: existing.id } });
@@ -119,6 +140,14 @@ export class AssetsService {
   // ─── DETAIL & TRANSACTIONS (existing) ─────────────────
 
   async getAssetDetail(userId: string, code: string) {
+    const asset = await this.prisma.asset.findUnique({
+      where: { userId_code: { userId, code } },
+    });
+
+    if (asset?.type === 'savings') {
+      return this.getSavingsDetail(userId, asset);
+    }
+
     const transactions = await this.prisma.transaction.findMany({
       where: { userId, assetCode: code },
       orderBy: { date: 'asc' },
@@ -129,10 +158,6 @@ export class AssetsService {
     }
 
     const priceData = await this.prisma.price.findUnique({
-      where: { userId_code: { userId, code } },
-    });
-
-    const asset = await this.prisma.asset.findUnique({
       where: { userId_code: { userId, code } },
     });
 
@@ -314,6 +339,80 @@ export class AssetsService {
         limit,
         pages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  private async getSavingsDetail(userId: string, asset: any) {
+    const events = await this.prisma.savingsEvent.findMany({
+      where: { userId, assetCode: asset.code },
+      orderBy: { date: 'asc' },
+    });
+
+    let balance = 0;
+    let principal = 0;
+    let interestEarned = 0;
+    let depositCount = 0;
+    let withdrawCount = 0;
+    const valueHistory: { date: string; value: number }[] = [];
+
+    for (const ev of events) {
+      const positive = ev.type === 'DEPOSIT' || ev.type === 'INTEREST';
+      balance += positive ? ev.amount : -ev.amount;
+      if (ev.type === 'DEPOSIT') {
+        principal += ev.amount;
+        depositCount++;
+      } else if (ev.type === 'INTEREST') {
+        interestEarned += ev.amount;
+      } else if (ev.type === 'WITHDRAW') {
+        withdrawCount++;
+      }
+      valueHistory.push({ date: toDateStr(ev.date), value: Math.round(balance) });
+    }
+
+    const profitPercent =
+      principal > 0 ? Math.round((interestEarned / principal) * 10000) / 100 : 0;
+
+    return {
+      assetCode: asset.code,
+      assetType: 'savings',
+      currency: asset.currency || 'VND',
+      icon: asset.icon,
+      iconBg: asset.iconBg,
+      bankName: asset.bankName,
+      interestRate: asset.interestRate,
+      termMonths: asset.termMonths,
+      maturityDate: asset.maturityDate ? toDateStr(asset.maturityDate) : null,
+      metrics: {
+        balance: {
+          value: Math.round(balance),
+          currency: asset.currency || 'VND',
+        },
+        principal: {
+          value: Math.round(principal),
+          currency: asset.currency || 'VND',
+        },
+        interestEarned: {
+          value: Math.round(interestEarned),
+          currency: asset.currency || 'VND',
+        },
+        profit: {
+          amount: Math.round(interestEarned),
+          percent: profitPercent,
+          positive: interestEarned >= 0,
+        },
+        eventCounts: {
+          deposit: depositCount,
+          withdraw: withdrawCount,
+        },
+      },
+      events: events.map((ev) => ({
+        id: ev.id,
+        type: ev.type,
+        amount: ev.amount,
+        date: toDateStr(ev.date),
+        note: ev.note,
+      })),
+      valueHistory,
     };
   }
 }

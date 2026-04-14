@@ -12,6 +12,7 @@ import { AssetsModule } from './assets/assets.module.js';
 import { AllocationModule } from './allocation/allocation.module.js';
 import { CurrenciesModule } from './currencies/currencies.module.js';
 import { GoalsModule } from './goals/goals.module.js';
+import { SavingsEventsModule } from './savings-events/savings-events.module.js';
 import { I18nModule } from './i18n/i18n.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 import { GuestWriteGuard } from './auth/guards/guest-write.guard.js';
@@ -31,6 +32,7 @@ import { GuestWriteGuard } from './auth/guards/guest-write.guard.js';
     AllocationModule,
     CurrenciesModule,
     GoalsModule,
+    SavingsEventsModule,
   ],
   providers: [
     {

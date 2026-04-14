@@ -1,14 +1,69 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
+import { SavingsEventsService } from '../savings-events/savings-events.service.js';
 import { getPeriodStartDate, toDateStr, roundByCurrency } from '../common/helpers/period.helper.js';
+
+interface SavingsHolding {
+  assetCode: string;
+  assetType: 'savings';
+  name: string;
+  icon: string;
+  iconBg: string;
+  quantity: number;
+  averageCost: number;
+  currentPrice: number;
+  currency: string;
+  value: number;
+  profitLossPercent: number;
+  profitLossAmount: number;
+  positive: boolean;
+  principal: number;
+  depositCount: number;
+}
 
 @Injectable()
 export class PortfolioService {
   constructor(
     private prisma: PrismaService,
     private currenciesService: CurrenciesService,
+    private savingsEvents: SavingsEventsService,
   ) {}
+
+  private async getSavingsHoldings(userId: string): Promise<SavingsHolding[]> {
+    const savingsAssets = await this.prisma.asset.findMany({
+      where: { userId, type: 'savings' },
+    });
+    if (savingsAssets.length === 0) return [];
+
+    const result: SavingsHolding[] = [];
+    for (const asset of savingsAssets) {
+      const summary = await this.savingsEvents.computeBalance(userId, asset.code);
+      if (summary.balance <= 0 && summary.principal <= 0) continue;
+      const profitPercent =
+        summary.principal > 0
+          ? Math.round((summary.interestEarned / summary.principal) * 10000) / 100
+          : 0;
+      result.push({
+        assetCode: asset.code,
+        assetType: 'savings',
+        name: asset.name,
+        icon: asset.icon,
+        iconBg: asset.iconBg,
+        quantity: 1,
+        averageCost: summary.principal,
+        currentPrice: summary.balance,
+        currency: asset.currency || 'VND',
+        value: Math.round(summary.balance),
+        profitLossPercent: profitPercent,
+        profitLossAmount: Math.round(summary.interestEarned),
+        positive: summary.interestEarned >= 0,
+        principal: summary.principal,
+        depositCount: summary.depositCount,
+      });
+    }
+    return result;
+  }
 
   private async getAssetCurrencyMap(userId: string): Promise<Map<string, string>> {
     const assets = await this.prisma.asset.findMany({
@@ -30,11 +85,12 @@ export class PortfolioService {
   }
 
   async getSummary(userId: string) {
-    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
+    const [transactions, prices, assetCurrencyMap, rateMap, savingsHoldings] = await Promise.all([
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
       this.getAssetCurrencyMap(userId),
       this.currenciesService.getRateMap(userId),
+      this.getSavingsHoldings(userId),
     ]);
 
     const priceMap = new Map<string, number>();
@@ -87,6 +143,13 @@ export class PortfolioService {
       }
     });
 
+    for (const sh of savingsHoldings) {
+      totalValue += sh.value;
+      capitalInvested += sh.principal;
+      assetCodes.push(sh.assetCode);
+      buyOrdersCount += sh.depositCount;
+    }
+
     const profit = totalValue - capitalInvested;
     const profitPercentage =
       capitalInvested > 0 ? Math.round((profit / capitalInvested) * 10000) / 100 : 0;
@@ -103,11 +166,12 @@ export class PortfolioService {
   }
 
   async getHoldings(userId: string) {
-    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
+    const [transactions, prices, assetCurrencyMap, rateMap, savingsHoldings] = await Promise.all([
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
       this.getAssetCurrencyMap(userId),
       this.currenciesService.getRateMap(userId),
+      this.getSavingsHoldings(userId),
     ]);
 
     const priceMap = new Map<string, { price: number; icon: string }>();
@@ -150,6 +214,9 @@ export class PortfolioService {
     });
 
     const result: any[] = [];
+    for (const sh of savingsHoldings) {
+      result.push(sh);
+    }
     assetMap.forEach((a, code) => {
       if (a.netQty <= 0) return;
       const avgCost = a.totalBuyQty > 0 ? a.totalBuyCost / a.totalBuyQty : 0;
@@ -248,7 +315,7 @@ export class PortfolioService {
   async getHistory(userId: string, period: string = '6m') {
     const startDate = getPeriodStartDate(period);
 
-    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
+    const [transactions, prices, assetCurrencyMap, rateMap, savingsEventsAll] = await Promise.all([
       this.prisma.transaction.findMany({
         where: { userId },
         orderBy: { date: 'asc' },
@@ -256,16 +323,25 @@ export class PortfolioService {
       this.prisma.price.findMany({ where: { userId } }),
       this.getAssetCurrencyMap(userId),
       this.currenciesService.getRateMap(userId),
+      this.prisma.savingsEvent.findMany({
+        where: { userId },
+        orderBy: { date: 'asc' },
+      }),
     ]);
 
     const priceMap = new Map<string, number>();
     prices.forEach((p) => priceMap.set(p.code, p.price));
 
-    if (transactions.length === 0) {
+    if (transactions.length === 0 && savingsEventsAll.length === 0) {
       return { period, points: [] };
     }
 
-    const firstTxDate = transactions[0].date;
+    const firstTxDate =
+      transactions.length > 0 && savingsEventsAll.length > 0
+        ? transactions[0].date < savingsEventsAll[0].date
+          ? transactions[0].date
+          : savingsEventsAll[0].date
+        : transactions[0]?.date || savingsEventsAll[0].date;
     const today = new Date();
     const windowStart = startDate && startDate > firstTxDate ? startDate : firstTxDate;
 
@@ -290,7 +366,9 @@ export class PortfolioService {
     }
 
     const runningHoldings = new Map<string, { qty: number; cost: number }>();
+    const savingsBalance = new Map<string, { balance: number; principal: number }>();
     let txIndex = 0;
+    let seIndex = 0;
     const points: {
       date: string;
       value: number;
@@ -325,6 +403,18 @@ export class PortfolioService {
         txIndex++;
       }
 
+      while (seIndex < savingsEventsAll.length && savingsEventsAll[seIndex].date <= pd) {
+        const ev = savingsEventsAll[seIndex];
+        if (!savingsBalance.has(ev.assetCode)) {
+          savingsBalance.set(ev.assetCode, { balance: 0, principal: 0 });
+        }
+        const s = savingsBalance.get(ev.assetCode)!;
+        const positive = ev.type === 'DEPOSIT' || ev.type === 'INTEREST';
+        s.balance += positive ? ev.amount : -ev.amount;
+        if (ev.type === 'DEPOSIT') s.principal += ev.amount;
+        seIndex++;
+      }
+
       let totalValue = 0;
       let totalCost = 0;
       runningHoldings.forEach((h, code) => {
@@ -334,6 +424,10 @@ export class PortfolioService {
           totalValue += h.qty * price * rate;
           totalCost += h.cost * rate;
         }
+      });
+      savingsBalance.forEach((s) => {
+        totalValue += s.balance;
+        totalCost += s.principal;
       });
 
       const profit = totalValue - totalCost;

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { I18nService } from '../i18n/i18n.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
+import { SavingsEventsService } from '../savings-events/savings-events.service.js';
 import { SetTargetsDto } from './dto/set-targets.dto.js';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class AllocationService {
     private prisma: PrismaService,
     private i18n: I18nService,
     private currenciesService: CurrenciesService,
+    private savingsEvents: SavingsEventsService,
   ) {}
 
   async getCurrent(userId: string) {
@@ -17,7 +19,7 @@ export class AllocationService {
       this.prisma.transaction.findMany({ where: { userId } }),
       this.prisma.price.findMany({ where: { userId } }),
       this.prisma.allocationTarget.findMany({ where: { userId } }),
-      this.prisma.asset.findMany({ where: { userId }, select: { code: true, currency: true } }),
+      this.prisma.asset.findMany({ where: { userId }, select: { code: true, currency: true, type: true } }),
       this.currenciesService.getRateMap(userId),
     ]);
 
@@ -29,6 +31,9 @@ export class AllocationService {
 
     const targetMap = new Map<string, number>();
     targets.forEach((t) => targetMap.set(t.assetType, t.targetPercent));
+
+    const savingsAssetCodes = assets.filter((a) => a.type === 'savings').map((a) => a.code);
+    const savingsBalances = await this.savingsEvents.computeBalancesByAsset(userId, savingsAssetCodes);
 
     const assetHoldings = new Map<string, { qty: number; type: string }>();
     transactions.forEach((t) => {
@@ -52,6 +57,12 @@ export class AllocationService {
       const value = h.qty * price * rate;
       typeValues.set(h.type, (typeValues.get(h.type) || 0) + value);
       totalValue += value;
+    });
+
+    savingsBalances.forEach((balance) => {
+      if (balance <= 0) return;
+      typeValues.set('savings', (typeValues.get('savings') || 0) + balance);
+      totalValue += balance;
     });
 
     const nameMap: Record<string, string> = {

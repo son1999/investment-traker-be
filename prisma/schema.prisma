@@ -59,6 +59,20 @@ model Transaction {
   @@map("transactions")
 }
 
+model SavingsEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  assetCode String   @map("asset_code")
+  type      String   // DEPOSIT, WITHDRAW, INTEREST, FEE, MATURITY
+  amount    Float
+  date      DateTime @db.Date
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, assetCode])
+  @@map("savings_events")
+}
+
 model Price {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
