@@ -16,6 +16,10 @@ export class TransactionsService {
   async findAll(userId: string, query: QueryTransactionDto) {
     const { filter, search, page = 1, limit = 20 } = query;
 
+    if (filter === 'savings') {
+      return this.findAllSavings(userId, { search, page, limit });
+    }
+
     const where: any = { userId };
     if (filter) where.assetType = filter;
     if (search) where.assetCode = { contains: search, mode: 'insensitive' };
@@ -38,6 +42,54 @@ export class TransactionsService {
         limit,
         pages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  private async findAllSavings(
+    userId: string,
+    { search, page = 1, limit = 20 }: { search?: string; page?: number; limit?: number },
+  ) {
+    const savingsAssets = await this.prisma.asset.findMany({
+      where: { userId, type: 'savings' },
+      select: { code: true, name: true, icon: true, iconBg: true, currency: true },
+    });
+    const assetMap = new Map(savingsAssets.map((a) => [a.code, a]));
+
+    const where: any = { userId };
+    if (search) where.assetCode = { contains: search, mode: 'insensitive' };
+
+    const [events, total] = await this.prisma.$transaction([
+      this.prisma.savingsEvent.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.savingsEvent.count({ where }),
+    ]);
+
+    return {
+      data: events.map((ev) => {
+        const asset = assetMap.get(ev.assetCode);
+        const positive = ev.type === 'DEPOSIT' || ev.type === 'INTEREST';
+        return {
+          id: ev.id,
+          userId,
+          date: toDateStr(ev.date),
+          assetType: 'savings',
+          assetCode: ev.assetCode,
+          action: positive ? 'MUA' : 'BAN',
+          savingsEventType: ev.type,
+          quantity: ev.amount,
+          unitPrice: 1,
+          currency: asset?.currency || 'VND',
+          note: ev.note,
+          icon: asset?.icon || '🏦',
+          iconBg: asset?.iconBg || 'rgba(34,197,94,0.15)',
+          createdAt: ev.createdAt,
+        };
+      }),
+      meta: { total, page, limit, pages: Math.ceil(total / limit) },
     };
   }
 

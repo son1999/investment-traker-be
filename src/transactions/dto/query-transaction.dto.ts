@@ -3,9 +3,9 @@ import { IsEnum, IsInt, IsOptional, IsPositive, IsString, Min } from 'class-vali
 import { Type } from 'class-transformer';
 
 export class QueryTransactionDto {
-  @ApiPropertyOptional({ enum: ['metal', 'crypto', 'stock'] })
+  @ApiPropertyOptional({ enum: ['metal', 'crypto', 'stock', 'savings'] })
   @IsOptional()
-  @IsEnum(['metal', 'crypto', 'stock'])
+  @IsEnum(['metal', 'crypto', 'stock', 'savings'])
   filter?: string;
 
   @ApiPropertyOptional()
