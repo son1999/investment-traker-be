@@ -48,10 +48,10 @@ export class GoalsService {
     const onTrack = progressPercent >= 100 || (daysRemaining > 0 && projectedFinal >= goal.targetAmount);
 
     return {
-      currentValue: Math.round(currentValue),
+      currentValue,
       targetAmount: goal.targetAmount,
       progressPercent: Math.min(progressPercent, 100),
-      remainingAmount: Math.round(remainingAmount),
+      remainingAmount,
       daysRemaining,
       onTrack,
     };

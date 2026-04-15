@@ -23,15 +23,10 @@ export function getMonthKey(date: Date): string {
   return toDateStr(date).substring(0, 7);
 }
 
-const ZERO_DECIMAL_CURRENCIES = new Set(['VND', 'JPY', 'KRW']);
-
 /**
- * Round a monetary value based on currency.
- * VND/JPY/KRW → 0 decimals, others (USD/USDT/EUR) → 2 decimals.
+ * Pass-through. Money values must NEVER be rounded — the FE displays full precision.
+ * Kept as a no-op so existing call sites remain valid; prefer removing usages over time.
  */
-export function roundByCurrency(value: number, currency: string): number {
-  if (ZERO_DECIMAL_CURRENCIES.has(currency)) {
-    return Math.round(value);
-  }
-  return Math.round(value * 100) / 100;
+export function roundByCurrency(value: number, _currency: string): number {
+  return value;
 }

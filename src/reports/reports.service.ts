@@ -103,10 +103,10 @@ export class ReportsService {
 
       const label = new Date(monthKey + '-15').toLocaleDateString('en-US', { month: 'short' });
       monthLabels.push(label);
-      series.metal.push(Math.round(typeValues.metal));
-      series.crypto.push(Math.round(typeValues.crypto));
-      series.stock.push(Math.round(typeValues.stock));
-      series.savings.push(Math.round(typeValues.savings));
+      series.metal.push(typeValues.metal);
+      series.crypto.push(typeValues.crypto);
+      series.stock.push(typeValues.stock);
+      series.savings.push(typeValues.savings);
     }
 
     return { months: monthLabels, series };
@@ -166,10 +166,10 @@ export class ReportsService {
     });
 
     return {
-      totalDeposited: Math.round(totalDeposited),
-      totalWithdrawn: Math.round(totalWithdrawn),
-      realizedPnl: Math.round(realizedPnl),
-      unrealizedPnl: Math.round(unrealizedPnl),
+      totalDeposited,
+      totalWithdrawn,
+      realizedPnl,
+      unrealizedPnl,
     };
   }
 
@@ -201,8 +201,8 @@ export class ReportsService {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, flow]) => ({
         month,
-        inflow: Math.round(flow.inflow),
-        outflow: Math.round(flow.outflow),
+        inflow: flow.inflow,
+        outflow: flow.outflow,
       }));
   }
 
@@ -262,10 +262,10 @@ export class ReportsService {
         assetType: a.assetType,
         name: code,
         icon: priceInfo?.icon || a.icon,
-        invested: Math.round(invested),
-        currentValue: Math.round(currentValue),
+        invested,
+        currentValue,
         profitLossPercent: pnlPercent,
-        profitLossAmount: Math.round(pnlAmount),
+        profitLossAmount: pnlAmount,
         positive: pnlAmount >= 0,
         value: currentValue,
       });
@@ -330,8 +330,8 @@ export class ReportsService {
       result.push({
         name: code,
         assetCode: code,
-        invested: Math.round(invested),
-        currentValue: Math.round(currentValue),
+        invested,
+        currentValue,
         profitPercent,
         positive: currentValue >= invested,
       });

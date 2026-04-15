@@ -85,7 +85,7 @@ export class AllocationService {
       result.push({
         assetType,
         name: nameMap[assetType] || assetType,
-        value: Math.round(value),
+        value,
         actualPercent,
         targetPercent,
         status,
@@ -136,7 +136,7 @@ export class AllocationService {
           actions.push({
             assetType: c.assetType,
             action: 'sell',
-            amount: Math.round(Math.abs(diff)),
+            amount: Math.abs(diff),
             description: this.i18n.t('SELL_RECOMMENDATION', {
               amount: Math.round(Math.abs(diff) / 1000000),
               name: c.name,
@@ -146,7 +146,7 @@ export class AllocationService {
           actions.push({
             assetType: c.assetType,
             action: 'buy',
-            amount: Math.round(Math.abs(diff)),
+            amount: Math.abs(diff),
             description: this.i18n.t('BUY_RECOMMENDATION', {
               amount: Math.round(Math.abs(diff) / 1000000),
               name: c.name,

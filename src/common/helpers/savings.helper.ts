@@ -33,5 +33,5 @@ export function calculateSavingsValue(
     value += value * (annualRate / 100) * (remainingDays / 365);
   }
 
-  return Math.round(value);
+  return value;
 }

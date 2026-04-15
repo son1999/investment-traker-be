@@ -360,16 +360,16 @@ export class AssetsService {
     for (const ev of events) {
       const positive = ev.type === 'DEPOSIT' || ev.type === 'INTEREST';
       runningBalance += positive ? ev.amount : -ev.amount;
-      valueHistory.push({ date: toDateStr(ev.date), value: Math.round(runningBalance) });
+      valueHistory.push({ date: toDateStr(ev.date), value: runningBalance });
     }
 
     const today = toDateStr(new Date());
     const lastEntry = valueHistory[valueHistory.length - 1];
-    if (Math.round(balance) !== Math.round(runningBalance)) {
+    if (balance !== runningBalance) {
       if (lastEntry && lastEntry.date === today) {
-        lastEntry.value = Math.round(balance);
+        lastEntry.value = balance;
       } else {
-        valueHistory.push({ date: today, value: Math.round(balance) });
+        valueHistory.push({ date: today, value: balance });
       }
     }
 
@@ -388,19 +388,19 @@ export class AssetsService {
       maturityDate: asset.maturityDate ? toDateStr(asset.maturityDate) : null,
       metrics: {
         balance: {
-          value: Math.round(balance),
+          value: balance,
           currency: asset.currency || 'VND',
         },
         principal: {
-          value: Math.round(principal),
+          value: principal,
           currency: asset.currency || 'VND',
         },
         interestEarned: {
-          value: Math.round(interestEarned),
+          value: interestEarned,
           currency: asset.currency || 'VND',
         },
         profit: {
-          amount: Math.round(interestEarned),
+          amount: interestEarned,
           percent: profitPercent,
           positive: interestEarned >= 0,
         },

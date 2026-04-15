@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
 import { SavingsEventsService } from '../savings-events/savings-events.service.js';
-import { getPeriodStartDate, toDateStr, roundByCurrency } from '../common/helpers/period.helper.js';
+import { getPeriodStartDate, toDateStr } from '../common/helpers/period.helper.js';
 
 interface SavingsHolding {
   assetCode: string;
@@ -57,9 +57,9 @@ export class PortfolioService {
         averageCost: summary.principal,
         currentPrice: summary.balance,
         currency: asset.currency || 'VND',
-        value: Math.round(summary.balance),
+        value: summary.balance,
         profitLossPercent: profitPercent,
-        profitLossAmount: Math.round(summary.interestEarned),
+        profitLossAmount: summary.interestEarned,
         positive: summary.interestEarned >= 0,
         principal: summary.principal,
         depositCount: summary.depositCount,
@@ -158,9 +158,9 @@ export class PortfolioService {
       capitalInvested > 0 ? Math.round((profit / capitalInvested) * 10000) / 100 : 0;
 
     return {
-      totalValue: Math.round(totalValue),
-      capitalInvested: Math.round(capitalInvested),
-      profit: Math.round(profit),
+      totalValue,
+      capitalInvested,
+      profit,
       profitPercentage,
       assetsCount: assetCodes.length,
       buyOrdersCount,
@@ -239,12 +239,12 @@ export class PortfolioService {
         icon: priceInfo?.icon || a.icon,
         iconBg: a.iconBg,
         quantity: a.netQty,
-        averageCost: roundByCurrency(avgCost, currency),
-        currentPrice: roundByCurrency(currentPrice, currency),
+        averageCost: avgCost,
+        currentPrice,
         currency,
-        value: Math.round(valueVnd),
+        value: valueVnd,
         profitLossPercent,
-        profitLossAmount: Math.round(profitLossAmount),
+        profitLossAmount,
         positive: profitLossAmount >= 0,
       });
     });
@@ -277,7 +277,7 @@ export class PortfolioService {
         assetType,
         label: labelMap[assetType] || assetType,
         value: totalValue > 0 ? Math.round((val.amount / totalValue) * 10000) / 100 : 0,
-        amount: Math.round(val.amount),
+        amount: val.amount,
       });
     });
 
@@ -292,11 +292,8 @@ export class PortfolioService {
       .map((h) => {
         const currency = h.currency || 'VND';
         const rate = this.getRate(h.assetCode, assetCurrencyMap, rateMap);
-        const costNative = roundByCurrency(h.averageCost * h.quantity, currency);
-        const valueNative = roundByCurrency(
-          h.value / (rate || 1),
-          currency,
-        );
+        const costNative = h.averageCost * h.quantity;
+        const valueNative = h.value / (rate || 1);
         return {
           symbol: h.assetCode,
           assetType: h.assetType,
@@ -305,7 +302,7 @@ export class PortfolioService {
           currency,
           costNative,
           valueNative,
-          cost: Math.round(costNative * rate),
+          cost: costNative * rate,
           value: h.value,
           profit: h.profitLossAmount,
           profitPercent: h.profitLossPercent,
@@ -439,9 +436,9 @@ export class PortfolioService {
 
       points.push({
         date: toDateStr(pd),
-        value: Math.round(totalValue),
-        cost: Math.round(totalCost),
-        profit: Math.round(profit),
+        value: totalValue,
+        cost: totalCost,
+        profit,
         profitPercentage,
       });
     }
