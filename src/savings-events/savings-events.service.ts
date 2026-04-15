@@ -2,6 +2,17 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service.js';
 import { I18nService } from '../i18n/i18n.service.js';
 import { CreateSavingsEventDto, SavingsEventType } from './dto/create-savings-event.dto.js';
+import { calculateSavingsValue } from '../common/helpers/savings.helper.js';
+
+export interface SavingsBalanceSummary {
+  balance: number;
+  principal: number;
+  interestEarned: number;
+  accruedInterest: number;
+  depositCount: number;
+  withdrawCount: number;
+  firstDepositDate: Date | null;
+}
 
 const POSITIVE_TYPES: SavingsEventType[] = ['DEPOSIT', 'INTEREST'];
 
@@ -31,15 +42,14 @@ export class SavingsEventsService {
     }));
   }
 
-  async computeBalance(userId: string, assetCode: string): Promise<{
-    balance: number;
-    principal: number;
-    interestEarned: number;
-    depositCount: number;
-    withdrawCount: number;
-  }> {
+  async computeBalance(
+    userId: string,
+    assetCode: string,
+    asset?: { interestRate: number | null; termMonths: number | null },
+  ): Promise<SavingsBalanceSummary> {
     const events = await this.prisma.savingsEvent.findMany({
       where: { userId, assetCode },
+      orderBy: { date: 'asc' },
     });
 
     let balance = 0;
@@ -47,12 +57,16 @@ export class SavingsEventsService {
     let interestEarned = 0;
     let depositCount = 0;
     let withdrawCount = 0;
+    let firstDepositDate: Date | null = null;
 
     for (const event of events) {
       balance += this.signedAmount(event.type, event.amount);
       if (event.type === 'DEPOSIT') {
         principal += event.amount;
         depositCount++;
+        if (!firstDepositDate || event.date < firstDepositDate) {
+          firstDepositDate = event.date;
+        }
       } else if (event.type === 'INTEREST') {
         interestEarned += event.amount;
       } else if (event.type === 'WITHDRAW') {
@@ -60,7 +74,27 @@ export class SavingsEventsService {
       }
     }
 
-    return { balance, principal, interestEarned, depositCount, withdrawCount };
+    let accruedInterest = 0;
+    const rate = asset?.interestRate ?? 0;
+    const term = asset?.termMonths ?? 0;
+    if (rate > 0 && term > 0 && principal > 0 && firstDepositDate) {
+      const projectedValue = calculateSavingsValue(principal, rate, term, firstDepositDate);
+      accruedInterest = Math.max(0, projectedValue - principal);
+      if (interestEarned === 0 && accruedInterest > 0) {
+        interestEarned = accruedInterest;
+        balance += accruedInterest;
+      }
+    }
+
+    return {
+      balance,
+      principal,
+      interestEarned,
+      accruedInterest,
+      depositCount,
+      withdrawCount,
+      firstDepositDate,
+    };
   }
 
   async computeBalancesByAsset(userId: string, assetCodes?: string[]): Promise<Map<string, number>> {

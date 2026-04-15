@@ -38,7 +38,10 @@ export class PortfolioService {
 
     const result: SavingsHolding[] = [];
     for (const asset of savingsAssets) {
-      const summary = await this.savingsEvents.computeBalance(userId, asset.code);
+      const summary = await this.savingsEvents.computeBalance(userId, asset.code, {
+        interestRate: asset.interestRate,
+        termMonths: asset.termMonths,
+      });
       if (summary.balance <= 0 && summary.principal <= 0) continue;
       const profitPercent =
         summary.principal > 0

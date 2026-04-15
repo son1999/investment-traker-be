@@ -348,25 +348,29 @@ export class AssetsService {
       orderBy: { date: 'asc' },
     });
 
-    let balance = 0;
-    let principal = 0;
-    let interestEarned = 0;
-    let depositCount = 0;
-    let withdrawCount = 0;
-    const valueHistory: { date: string; value: number }[] = [];
+    const summary = await this.savingsEvents.computeBalance(userId, asset.code, {
+      interestRate: asset.interestRate,
+      termMonths: asset.termMonths,
+    });
 
+    const { balance, principal, interestEarned, depositCount, withdrawCount } = summary;
+
+    let runningBalance = 0;
+    const valueHistory: { date: string; value: number }[] = [];
     for (const ev of events) {
       const positive = ev.type === 'DEPOSIT' || ev.type === 'INTEREST';
-      balance += positive ? ev.amount : -ev.amount;
-      if (ev.type === 'DEPOSIT') {
-        principal += ev.amount;
-        depositCount++;
-      } else if (ev.type === 'INTEREST') {
-        interestEarned += ev.amount;
-      } else if (ev.type === 'WITHDRAW') {
-        withdrawCount++;
+      runningBalance += positive ? ev.amount : -ev.amount;
+      valueHistory.push({ date: toDateStr(ev.date), value: Math.round(runningBalance) });
+    }
+
+    const today = toDateStr(new Date());
+    const lastEntry = valueHistory[valueHistory.length - 1];
+    if (Math.round(balance) !== Math.round(runningBalance)) {
+      if (lastEntry && lastEntry.date === today) {
+        lastEntry.value = Math.round(balance);
+      } else {
+        valueHistory.push({ date: today, value: Math.round(balance) });
       }
-      valueHistory.push({ date: toDateStr(ev.date), value: Math.round(balance) });
     }
 
     const profitPercent =
