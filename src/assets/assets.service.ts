@@ -69,21 +69,9 @@ export class AssetsService {
           termMonths: dto.termMonths,
           bankName: dto.bankName || null,
           maturityDate: dto.maturityDate ? new Date(dto.maturityDate) : null,
-          principalAmount: dto.principalAmount,
         }),
       },
     });
-
-    if (dto.type === 'savings' && dto.principalAmount && dto.principalAmount > 0) {
-      await this.savingsEvents.createInternal(
-        userId,
-        asset.code,
-        'DEPOSIT',
-        dto.principalAmount,
-        new Date(),
-        'Gửi ban đầu',
-      );
-    }
 
     return asset;
   }
