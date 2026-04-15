@@ -1,14 +1,60 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
+import { SavingsEventsService } from '../savings-events/savings-events.service.js';
 import { getPeriodStartDate, toDateStr, getMonthKey, roundByCurrency } from '../common/helpers/period.helper.js';
+
+interface SavingsAssetSummary {
+  asset: {
+    code: string;
+    name: string;
+    icon: string;
+    iconBg: string;
+    interestRate: number | null;
+    termMonths: number | null;
+  };
+  summary: {
+    balance: number;
+    principal: number;
+    interestEarned: number;
+    accruedInterest: number;
+    firstDepositDate: Date | null;
+  };
+}
 
 @Injectable()
 export class ReportsService {
   constructor(
     private prisma: PrismaService,
     private currenciesService: CurrenciesService,
+    private savingsEvents: SavingsEventsService,
   ) {}
+
+  private async getSavingsAssetsWithSummary(userId: string): Promise<SavingsAssetSummary[]> {
+    const savingsAssets = await this.prisma.asset.findMany({
+      where: { userId, type: 'savings' },
+    });
+    const result: SavingsAssetSummary[] = [];
+    for (const asset of savingsAssets) {
+      const summary = await this.savingsEvents.computeBalance(userId, asset.code, {
+        interestRate: asset.interestRate,
+        termMonths: asset.termMonths,
+      });
+      if (summary.principal <= 0) continue;
+      result.push({
+        asset: {
+          code: asset.code,
+          name: asset.name,
+          icon: asset.icon,
+          iconBg: asset.iconBg,
+          interestRate: asset.interestRate,
+          termMonths: asset.termMonths,
+        },
+        summary,
+      });
+    }
+    return result;
+  }
 
   private async getFilteredTransactions(userId: string, period: string) {
     const startDate = getPeriodStartDate(period);
@@ -42,34 +88,31 @@ export class ReportsService {
   }
 
   async getPerformance(userId: string, period: string = 'all') {
-    const [transactions, prices, assetCurrencyMap, rateMap] = await Promise.all([
+    const periodStart = getPeriodStartDate(period);
+    const savingsWhere: any = { userId };
+    if (periodStart) savingsWhere.date = { gte: periodStart };
+
+    const [transactions, prices, assetCurrencyMap, rateMap, savingsEventsAll] = await Promise.all([
       this.getFilteredTransactions(userId, period),
       this.prisma.price.findMany({ where: { userId } }),
       this.getAssetCurrencyMap(userId),
       this.currenciesService.getRateMap(userId),
+      this.prisma.savingsEvent.findMany({
+        where: savingsWhere,
+        orderBy: { date: 'asc' },
+      }),
     ]);
 
     const priceMap = new Map<string, number>();
     prices.forEach((p) => priceMap.set(p.code, p.price));
 
     const monthlyHoldings = new Map<string, boolean>();
-    const runningHoldings = new Map<string, { qty: number; type: string }>();
 
     transactions.forEach((t) => {
-      const monthKey = getMonthKey(t.date);
-      const code = t.assetCode;
-
-      if (!runningHoldings.has(code)) {
-        runningHoldings.set(code, { qty: 0, type: t.assetType });
-      }
-      const h = runningHoldings.get(code)!;
-      if (t.action === 'MUA') {
-        h.qty += t.quantity;
-      } else {
-        h.qty -= t.quantity;
-      }
-
-      monthlyHoldings.set(monthKey, true);
+      monthlyHoldings.set(getMonthKey(t.date), true);
+    });
+    savingsEventsAll.forEach((ev) => {
+      monthlyHoldings.set(getMonthKey(ev.date), true);
     });
 
     const sortedMonthKeys = Array.from(monthlyHoldings.keys()).sort();
@@ -77,8 +120,10 @@ export class ReportsService {
     const monthLabels: string[] = [];
 
     const cumulativeHoldings = new Map<string, { qty: number; type: string }>();
+    const savingsBalanceByCode = new Map<string, number>();
 
     let txIdx = 0;
+    let seIdx = 0;
     for (const monthKey of sortedMonthKeys) {
       while (txIdx < transactions.length && getMonthKey(transactions[txIdx].date) <= monthKey) {
         const t = transactions[txIdx];
@@ -92,6 +137,17 @@ export class ReportsService {
         txIdx++;
       }
 
+      while (seIdx < savingsEventsAll.length && getMonthKey(savingsEventsAll[seIdx].date) <= monthKey) {
+        const ev = savingsEventsAll[seIdx];
+        const current = savingsBalanceByCode.get(ev.assetCode) || 0;
+        if (ev.type === 'DEPOSIT' || ev.type === 'INTEREST') {
+          savingsBalanceByCode.set(ev.assetCode, current + ev.amount);
+        } else if (ev.type === 'WITHDRAW' || ev.type === 'FEE') {
+          savingsBalanceByCode.set(ev.assetCode, current - ev.amount);
+        }
+        seIdx++;
+      }
+
       const typeValues: Record<string, number> = { metal: 0, crypto: 0, stock: 0, savings: 0 };
       cumulativeHoldings.forEach((h, code) => {
         if (h.qty > 0) {
@@ -99,6 +155,9 @@ export class ReportsService {
           const rate = this.getRate(code, assetCurrencyMap, rateMap);
           typeValues[h.type] = (typeValues[h.type] || 0) + h.qty * price * rate;
         }
+      });
+      savingsBalanceByCode.forEach((bal) => {
+        if (bal > 0) typeValues.savings += bal;
       });
 
       const label = new Date(monthKey + '-15').toLocaleDateString('en-US', { month: 'short' });
@@ -165,6 +224,23 @@ export class ReportsService {
       });
     });
 
+    const periodStart = getPeriodStartDate(period);
+    const savingsEventWhere: any = { userId };
+    if (periodStart) savingsEventWhere.date = { gte: periodStart };
+    const periodSavingsEvents = await this.prisma.savingsEvent.findMany({
+      where: savingsEventWhere,
+    });
+    for (const ev of periodSavingsEvents) {
+      if (ev.type === 'DEPOSIT') totalDeposited += ev.amount;
+      else if (ev.type === 'WITHDRAW' || ev.type === 'FEE') totalWithdrawn += ev.amount;
+      else if (ev.type === 'INTEREST') realizedPnl += ev.amount;
+    }
+
+    const savingsAssets = await this.getSavingsAssetsWithSummary(userId);
+    for (const { summary } of savingsAssets) {
+      unrealizedPnl += summary.accruedInterest;
+    }
+
     return {
       totalDeposited,
       totalWithdrawn,
@@ -196,6 +272,22 @@ export class ReportsService {
         flow.outflow += total;
       }
     });
+
+    const periodStart = getPeriodStartDate(period);
+    const savingsWhere: any = { userId };
+    if (periodStart) savingsWhere.date = { gte: periodStart };
+    const savingsEventsForFlow = await this.prisma.savingsEvent.findMany({
+      where: savingsWhere,
+    });
+    for (const ev of savingsEventsForFlow) {
+      const month = getMonthKey(ev.date);
+      if (!monthlyFlow.has(month)) {
+        monthlyFlow.set(month, { inflow: 0, outflow: 0 });
+      }
+      const flow = monthlyFlow.get(month)!;
+      if (ev.type === 'DEPOSIT') flow.inflow += ev.amount;
+      else if (ev.type === 'WITHDRAW' || ev.type === 'FEE') flow.outflow += ev.amount;
+    }
 
     return Array.from(monthlyFlow.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -271,6 +363,27 @@ export class ReportsService {
       });
     });
 
+    const savingsList = await this.getSavingsAssetsWithSummary(userId);
+    for (const { asset, summary } of savingsList) {
+      const pnlPercent =
+        summary.principal > 0
+          ? Math.round((summary.interestEarned / summary.principal) * 10000) / 100
+          : 0;
+      totalPortfolioValue += summary.balance;
+      assets.push({
+        assetCode: asset.code,
+        assetType: 'savings',
+        name: asset.name,
+        icon: asset.icon,
+        invested: summary.principal,
+        currentValue: summary.balance,
+        profitLossPercent: pnlPercent,
+        profitLossAmount: summary.interestEarned,
+        positive: summary.interestEarned >= 0,
+        value: summary.balance,
+      });
+    }
+
     return assets
       .sort((a, b) => b.value - a.value)
       .slice(0, limit)
@@ -336,6 +449,22 @@ export class ReportsService {
         positive: currentValue >= invested,
       });
     });
+
+    const savingsList = await this.getSavingsAssetsWithSummary(userId);
+    for (const { asset, summary } of savingsList) {
+      const profitPercent =
+        summary.principal > 0
+          ? Math.round((summary.interestEarned / summary.principal) * 10000) / 100
+          : 0;
+      result.push({
+        name: asset.name || asset.code,
+        assetCode: asset.code,
+        invested: summary.principal,
+        currentValue: summary.balance,
+        profitPercent,
+        positive: summary.balance >= summary.principal,
+      });
+    }
 
     return result;
   }
